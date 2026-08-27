@@ -1,0 +1,18 @@
+{
+  "extends": "@lms/config/tsconfig.react.json",
+  "compilerOptions": {
+    "types": [
+      "react",
+      "react-dom",
+      "vitest/globals",
+      "@testing-library/jest-dom"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts",
+    "vitest.config.ts",
+    "vitest.setup.ts"
+  ]
+}

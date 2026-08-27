@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+out/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+public/
+next-env.d.ts
+reference/

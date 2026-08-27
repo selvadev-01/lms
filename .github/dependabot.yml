@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Minor/patch bumps land as one PR — CI is the gate, not human review of
+      # each bump. Majors stay separate because they need judgement.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # React and Next majors move together with the whole ecosystem; take them
+      # deliberately, not on Dependabot's schedule.
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: next
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

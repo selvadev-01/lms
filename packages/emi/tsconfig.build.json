@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /**
+     * Emits CommonJS so the NestJS API — which compiles to CJS — can require
+     * this calculator at runtime. The web app imports the raw `src/*.ts` instead
+     * (Next.js transpiles workspace packages itself), so this build exists
+     * purely for the API's benefit. Mirrors `@lms/validation`.
+     */
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}
