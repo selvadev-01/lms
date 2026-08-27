@@ -1,0 +1,35 @@
+{
+  "cookies": [
+    {
+      "name": "lms_at",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YTAyNGJhOC04ZjNiLTQ3NjItYmMxNS02YTcwMmU3YWQ3OTUiLCJvcmdJZCI6IjhkZjRjNzUyLWI3ZGItNDQwYi1hMWEyLTUxMzVjYTNlNDQ3OCIsIm9yZ0NvZGUiOiJERU1PIiwic2lkIjoiMGIzOTU5MWYtNzU3OC00NzllLThjODEtNzc0YTQ0OWY5MmVjIiwiYnJhbmNoSWQiOiJmNTk4MGNkYi1hZmMzLTRiNzQtYjI0ZC0zMGEwOWI4MWE1NDgiLCJyb2xlcyI6WyJCUkFOQ0hfQURNSU4iXSwiaWF0IjoxNzg3Nzk0MjMwLCJleHAiOjE3ODc3OTUxMzB9.RTTKphGJrOwjVLPXXaFpFdgJxPPzSPKeJVc-g6eCIHE",
+      "domain": "localhost",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "lms_rt",
+      "value": "E1Ja8NTTBlEuUgwPAZi8XfEl_ZnUYv5UupCcTNd4Xh0",
+      "domain": "localhost",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "theme",
+          "value": "light"
+        }
+      ]
+    }
+  ]
+}

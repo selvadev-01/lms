@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Build scripts pnpm 10 blocks by default. Both ship prebuilt native binaries
+# that their postinstall step unpacks; without this, esbuild fails at runtime.
+onlyBuiltDependencies:
+  - esbuild
+  - unrs-resolver

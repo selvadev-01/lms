@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /**
+     * Jest runs the suite as CommonJS, but the app itself compiles with
+     * `module: nodenext`. Overriding it here — and only here — lets ts-jest
+     * transform the ESM-only workspace packages (`@lms/validation` ships raw
+     * `.ts` with `"type": "module"`) into something the CommonJS test runtime
+     * can require, without changing how the application is built.
+     */
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "resolvePackageJsonExports": false,
+    "verbatimModuleSyntax": false
+  }
+}

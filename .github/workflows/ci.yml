@@ -1,0 +1,91 @@
+# Runs only if this project is hosted on GitHub. If you are not using GitHub
+# Actions, this file is inert — but the gates it encodes still matter. Run them
+# locally before shipping:
+#
+#   npm run lint && npm run typecheck && npm run format:check && npm test && npm run build && npm run test:e2e
+#
+# Porting to another CI system means translating the steps below; the sequence
+# and the two audit checks are what count, not the YAML.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref — the newest push is the one that matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # CI has no .env.local; the schema's defaults are sufficient to build.
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # `ci` not `install` — respects the lockfile exactly.
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      # Fails the build on a known high-severity advisory.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      # Guard against reintroducing peer-conflict suppression — the exact
+      # anti-pattern inherited from the upstream template. See TEMPLATE-GUIDE.md §3.3.
+      - name: Reject dependency overrides
+        run: |
+          if node -e "process.exit(require('./package.json').overrides ? 0 : 1)"; then
+            echo "::error::package.json contains an 'overrides' block. Resolve the peer conflict instead of suppressing it."
+            exit 1
+          fi
