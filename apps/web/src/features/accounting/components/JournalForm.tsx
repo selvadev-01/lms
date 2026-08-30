@@ -18,6 +18,7 @@ import {
   type JournalFormState,
 } from "../actions/journal-actions";
 import JournalLineBuilder from "./JournalLineBuilder";
+import { todayIso } from "@/lib/business-date";
 
 /**
  * Author or edit a manual journal.
@@ -56,7 +57,9 @@ export default function JournalForm({
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [entryType, setEntryType] = useState(journal?.entryType ?? "MANUAL");
 
-  const today = new Date().toISOString().slice(0, 10);
+  // The Kolkata business date, not `toISOString()`. That returns the UTC date,
+  // so a journal entered after 18:30 IST defaulted to the previous day.
+  const today = todayIso();
 
   return (
     <form action={formAction} className="space-y-6">

@@ -42,12 +42,32 @@ export async function apiGet<T>(path: string): Promise<FetchResult<T>> {
 
     if (response.status === 401) return { status: "unauthenticated" };
     if (response.status === 403) return { status: "forbidden" };
-    if (!response.ok) return { status: "error" };
+    if (!response.ok) {
+      // Logged because the caller cannot: `FetchFailure` deliberately carries
+      // no status, so every read failure reaches the screen as one
+      // indistinguishable "could not load" message. Without this line a 429 and
+      // a 500 look identical from the outside, and the only way to tell them
+      // apart is to reproduce the request by hand.
+      logFailure(path, String(response.status));
+      return { status: "error" };
+    }
 
     return { status: "ok", data: (await response.json()) as T };
-  } catch {
+  } catch (error) {
+    logFailure(path, error instanceof Error ? error.message : "unknown");
     return { status: "error" };
   }
+}
+
+/**
+ * Records why a read failed, on the server only.
+ *
+ * The message is never returned to the caller: which upstream status a read hit
+ * is operational detail, and letting it reach the screen would describe this
+ * system's internals to whoever triggered the fault.
+ */
+function logFailure(path: string, reason: string): void {
+  console.error(`[api-fetch] GET ${path} failed: ${reason}`);
 }
 
 /**
@@ -75,10 +95,17 @@ export async function apiGetRecord<T>(path: string): Promise<RecordResult<T>> {
     if (response.status === 401) return { status: "unauthenticated" };
     if (response.status === 404) return { status: "not-found" };
     if (response.status === 403) return { status: "not-found" };
-    if (!response.ok) return { status: "error" };
+    if (!response.ok) {
+      // As in `apiGet`. Note this one also collapses 403 into "not-found" on
+      // purpose, to deny enumeration — so the log is the only place that
+      // distinction survives at all.
+      logFailure(path, String(response.status));
+      return { status: "error" };
+    }
 
     return { status: "ok", data: (await response.json()) as T };
-  } catch {
+  } catch (error) {
+    logFailure(path, error instanceof Error ? error.message : "unknown");
     return { status: "error" };
   }
 }

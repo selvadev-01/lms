@@ -16,6 +16,25 @@ import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/features/auth/api/session";
  * where the meanings would drift apart.
  */
 
+/**
+ * Headers the API's CSRF guard requires on every mutating request.
+ *
+ * `Origin` is stated explicitly because this call originates from the Next.js
+ * server, not a browser, so nothing sets one for us — and the guard blocks a
+ * mutation that arrives without it.
+ *
+ * `X-LMS-Request` is the custom header half of the guard: a browser cannot set
+ * it on a cross-origin request without a preflight the API refuses, so a forged
+ * request cannot carry it. Its value is never read.
+ *
+ * Exported so any future mutating call site can spread it rather than
+ * rediscovering the requirement from a 403.
+ */
+export const CSRF_HEADERS: Record<string, string> = {
+  Origin: env.NEXT_PUBLIC_APP_URL,
+  "X-LMS-Request": "1",
+};
+
 export const NOT_PERMITTED =
   "You do not have permission to perform that action.";
 export const RATE_LIMITED =
@@ -71,7 +90,11 @@ async function renewSession(
   cookieStore: Awaited<ReturnType<typeof cookies>>,
 ): Promise<string | null> {
   const fresh = await refreshSession(cookieStore.toString());
-  if (!fresh) return null;
+  // `"retry"` — the API could not answer — is handled the same as a refusal on
+  // the write path. A Server Action cannot usefully continue without a token:
+  // it would submit the write and be rejected. Ending here surfaces that as a
+  // sign-out rather than a silently dropped mutation.
+  if (fresh === null || fresh === "retry") return null;
 
   for (const cookie of fresh) {
     cookieStore.set(cookie.name, cookie.value, {
@@ -115,6 +138,7 @@ export async function call(
     fetch(`${env.API_BASE_URL}/api/v1${path}`, {
       method: init.method,
       headers: {
+        ...CSRF_HEADERS,
         ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(init.idempotencyKey
           ? { "Idempotency-Key": init.idempotencyKey }
@@ -232,7 +256,8 @@ export async function callMultipart(
   const send = (cookie: string) =>
     fetch(`${env.API_BASE_URL}/api/v1${path}`, {
       method: "POST",
-      headers: { cookie },
+      // No Content-Type: `fetch` sets it with the multipart boundary itself.
+      headers: { ...CSRF_HEADERS, cookie },
       body,
       cache: "no-store",
     });

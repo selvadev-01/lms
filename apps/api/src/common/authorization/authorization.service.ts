@@ -23,6 +23,14 @@ export interface EffectiveAuthorization {
   roles: string[];
   /** Union of the permissions granted by those ACTIVE roles, deduplicated. */
   permissions: string[];
+  /**
+   * True while a password someone else chose is still in force.
+   *
+   * Read here rather than from the token because it must go stale the instant
+   * the password is changed — a token minted before the change would otherwise
+   * keep the account confined until it expired.
+   */
+  mustChangePassword: boolean;
 }
 
 /** The subset of PrismaService this service needs, so a transaction can be passed. */
@@ -74,6 +82,7 @@ export class AuthorizationService {
       select: {
         status: true,
         branchId: true,
+        mustChangePassword: true,
         userRoles: {
           where: { role: { status: 'ACTIVE' } },
           select: {
@@ -107,6 +116,7 @@ export class AuthorizationService {
       branchId: row.branchId,
       roles: row.userRoles.map((assignment) => assignment.role.code),
       permissions: [...permissions],
+      mustChangePassword: row.mustChangePassword,
     };
   }
 

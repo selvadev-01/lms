@@ -1,46 +1,86 @@
 import { expect, test } from "@playwright/test";
 
+import { navSections } from "../src/layout/nav-items";
+
 /**
  * Sidebar links for Module 17 lead somewhere real.
  *
  * A link added to the nav without its page is invisible in a render test of the
  * pages themselves — the sidebar entry for Branch Settings pointed at a 404 and
  * nothing but following the link would have caught it.
+ *
+ * `nav-items.test.ts` now resolves every menu path against the app directory
+ * without a browser, which catches a missing page far more cheaply. This spec
+ * covers what that one cannot: that the link is reachable through the UI — the
+ * group opens, the link renders, and following it produces a real screen rather
+ * than a redirect to the dashboard.
+ *
+ * The names come from the nav source rather than a copy of it. A hardcoded list
+ * silently stops covering an entry the moment one is renamed or added.
  */
 
-const LINKS = [
-  "Organization Settings",
-  "Branch Settings",
-  "Configuration Changes",
-  "Operational Controls",
-  "Maintenance Jobs",
-  "Configuration Transfer",
-  "Data Retention",
-  "Audit Trail",
-];
+const COMPANY_SETTINGS_LINKS = navSections
+  .flatMap((section) => section.items)
+  .find((item) => item.name === "Company Settings")
+  ?.subItems?.map((sub) => sub.name);
 
 test.describe("Super Admin", () => {
   test.use({ storageState: "e2e/.auth/super-admin.json" });
 
-  for (const name of LINKS) {
-    test(`sidebar link "${name}" reaches a page`, async ({ page }) => {
-      await page.goto("/");
+  /**
+   * One test walking every link, not one test per link: this spec is in the
+   * RBAC group and shares its rate-limit budget, so eleven navigations across
+   * eleven tests would each pay the sign-in and dashboard cost again.
+   */
+  test("every Company Settings link reaches a page", async ({ page }) => {
+    expect(
+      COMPANY_SETTINGS_LINKS,
+      "Company Settings group not found",
+    ).toBeDefined();
 
-      // The group is collapsed until its parent is opened.
+    await page.goto("/");
+
+    for (const name of COMPANY_SETTINGS_LINKS ?? []) {
+      // The group is collapsed until its parent is opened, and returns to its
+      // route-derived state after each navigation.
       await page
         .getByRole("button", { name: /Company Settings/i })
         .first()
         .click();
 
       const link = page.getByRole("link", { name, exact: true }).first();
-      await expect(link).toBeVisible();
+      await expect(link, `"${name}" is missing from the menu`).toBeVisible();
       await link.click();
 
       await expect(
         page.getByRole("heading", { name: /404/i }),
+        `"${name}" reaches a 404`,
       ).toHaveCount(0);
-    });
-  }
+    }
+  });
+
+  /**
+   * The bug this whole redesign turned on: an exact-match active state left
+   * every detail route with nothing highlighted and its group snapped shut, so
+   * opening a record lost the reader's place in the menu.
+   */
+  test("a detail route keeps its group open and its entry marked", async ({
+    page,
+  }) => {
+    await page.goto("/customers");
+
+    const firstRow = page.getByRole("link").filter({ hasText: /CUS/ }).first();
+    if ((await firstRow.count()) === 0) test.skip();
+    await firstRow.click();
+
+    await expect(page).toHaveURL(/\/customers\/.+/);
+
+    const customersLink = page
+      .getByRole("link", { name: "Customers", exact: true })
+      .first();
+    await expect(customersLink).toBeVisible();
+    await expect(customersLink).toHaveAttribute("aria-current", "page");
+  });
 });
 
 test.describe("Scope separation", () => {
@@ -66,9 +106,9 @@ test.describe("Scope separation", () => {
     ).toBeVisible();
 
     // The Scope column reads "Organization" for every row on this screen.
-    await expect(page.getByRole("cell", { name: "Branch", exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByRole("cell", { name: "Branch", exact: true }),
+    ).toHaveCount(0);
   });
 });
 

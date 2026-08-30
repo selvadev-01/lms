@@ -36,7 +36,9 @@ import {
   SESSIONS_REVOKE_PERMISSION,
   SessionManagementService,
 } from './session-management.service';
+import { SignUpService, type SignUpResult } from './sign-up.service';
 import { SignInDto } from './dto/sign-in.dto';
+import { SignUpDto } from './dto/sign-up.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -59,8 +61,14 @@ const RECOVERY_ACCEPTED =
  */
 const RECOVERY_REQUEST_THROTTLE = {
   recoveryRequest: {},
-  // Named buckets are additive, so the 60/min default would still apply and
-  // silently cap anything configured above it.
+  // Buckets are additive, so without this the `default` limit would apply on
+  // top of the configured one and silently cap anything set above it.
+  //
+  // This is one half of the problem; the other half — every *named* bucket
+  // applying to every *other* route, so the signup limit of 3/min throttled the
+  // whole application — is closed by `skipIf` where the buckets are defined in
+  // AppModule. A route cannot fix that from here, which is why it is fixed
+  // there.
   default: { limit: Number.MAX_SAFE_INTEGER, ttl: 60_000 },
 };
 const RECOVERY_VERIFY_THROTTLE = {
@@ -74,12 +82,23 @@ const SIGN_IN_THROTTLE = {
   default: { limit: Number.MAX_SAFE_INTEGER, ttl: 60_000 },
 };
 
+/**
+ * Signup, far stricter than sign-in. Creating an organization is a
+ * once-per-lifetime act, and each one writes several hundred rows and burns an
+ * argon2 hash — see `signup.rateLimit`.
+ */
+const SIGN_UP_THROTTLE = {
+  signup: {},
+  default: { limit: Number.MAX_SAFE_INTEGER, ttl: 60_000 },
+};
+
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly recovery: RecoveryService,
     private readonly sessionManagement: SessionManagementService,
+    private readonly signUpService: SignUpService,
     private readonly config: ConfigService,
   ) {}
 
@@ -110,7 +129,10 @@ export class AuthController {
       sameSite: 'lax',
       path: '/',
       domain,
-      maxAge: 15 * 60 * 1000,
+      // Derived from AUTH_ACCESS_TTL, not restated: a literal here silently
+      // desyncs from the token's own lifetime the moment that is changed.
+      maxAge:
+        this.config.get<number>('auth.accessTokenTtlMs') ?? 15 * 60 * 1000,
     });
 
     res.cookie(REFRESH_COOKIE, refreshToken, {
@@ -163,6 +185,24 @@ export class AuthController {
       result.refreshExpiresAt,
     );
     return { user: result.user };
+  }
+
+  /**
+   * Creates an organization and its first Super Admin (Q-ACT-1, Q-ACT-2).
+   *
+   * 404s unless `ALLOW_PUBLIC_SIGNUP` is on. Deliberately does not set auth
+   * cookies — the response names the organization code so the client can send
+   * the user to a pre-filled sign-in form.
+   */
+  @Public()
+  @Throttle(SIGN_UP_THROTTLE)
+  @Post('sign-up')
+  @HttpCode(HttpStatus.CREATED)
+  async signUp(
+    @Body() dto: SignUpDto,
+    @Req() req: Request,
+  ): Promise<SignUpResult> {
+    return await this.signUpService.signUp(dto, this.meta(req));
   }
 
   @Public()

@@ -2,13 +2,19 @@
 
 import type { BranchSummary, RoleSummary, UserDetail } from "@lms/types";
 import { Alert, Button } from "@lms/ui";
-import { USER_STATUS_OPTIONS, pick } from "@lms/validation";
+import {
+  PASSWORD_MIN_LENGTH,
+  USER_STATUS_OPTIONS,
+  pick,
+} from "@lms/validation";
 import React, { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { SelectField } from "@/components/form/FormFields";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
+import PasswordInput from "@/components/form/input/PasswordInput";
+import CredentialRevealPanel from "./CredentialRevealPanel";
 import {
   createUserAction,
   updateUserAction,
@@ -57,9 +63,15 @@ export interface UserFormProps {
  *   status, roles and branch each have their own endpoint and permission, so
  *   putting them on this form would imply one save could change all four.
  *
- * The status field offers PENDING and INACTIVE but not ACTIVE: a new account has
- * no password, so ACTIVE would advertise access nobody can use. The API refuses
- * it too — this just avoids offering a choice that will be rejected.
+ * The status field offers PENDING and INACTIVE but not ACTIVE, because ACTIVE is
+ * not something the administrator picks — it is what setting a password causes.
+ * Leave the password blank and the account is provisioned without a credential,
+ * exactly as before; fill it in and the server activates the account and flags
+ * it for a forced change at first sign-in.
+ *
+ * On success WITH a password the action returns rather than redirecting, and
+ * this renders {@link CredentialRevealPanel} instead of the form — the password
+ * exists nowhere else, so it has to be shown before the page is left.
  */
 export default function UserForm({
   user,
@@ -85,6 +97,20 @@ export default function UserForm({
 
   const fieldError = (name: string): string | undefined =>
     state.errors?.[name]?.[0];
+
+  // Replaces the form entirely rather than sitting above it: the account exists
+  // now, so re-submitting the same fields would only produce a duplicate-mobile
+  // error, and leaving the inputs on screen invites exactly that.
+  if (state.credential) {
+    return (
+      <CredentialRevealPanel
+        mobile={state.credential.mobile}
+        password={state.credential.password}
+        returnHref={isEmployee ? "/employees" : "/users"}
+        returnLabel={isEmployee ? "Back to employees" : "Back to admins"}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -254,7 +280,36 @@ export default function UserForm({
               errors={
                 fieldError("status") ? [fieldError("status")!] : undefined
               }
-              hint="A new account has no password yet, so it cannot start active."
+              hint="Used only when you leave the password blank. Setting a password activates the account instead."
+            />
+
+            {/* Optional on purpose. Blank keeps the older behaviour — an account
+                with no credential, which the person sets themselves through
+                Forgot Password. Filled in, the account works immediately and is
+                confined to Change Password until they replace it. */}
+            <PasswordInput
+              id="password"
+              name="password"
+              label="Temporary Password (optional)"
+              toggleLabel="password"
+              placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
+              autoComplete="new-password"
+              errors={state.errors?.password}
+            >
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                Leave blank to create the account without one. If you set a
+                password, the user must change it the first time they sign in.
+              </p>
+            </PasswordInput>
+
+            <PasswordInput
+              id="confirmPassword"
+              name="confirmPassword"
+              label="Confirm Password"
+              toggleLabel="confirm password"
+              placeholder="Re-enter the password"
+              autoComplete="new-password"
+              errors={state.errors?.confirmPassword}
             />
           </>
         )}

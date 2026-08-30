@@ -1,3 +1,4 @@
+import type { SessionService } from '../auth/session.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -35,6 +36,13 @@ export interface EodStepContext {
   /** DATE-only, Asia/Kolkata (Rule 65). */
   businessDate: string;
   prisma: PrismaService;
+  /**
+   * Passed in rather than reached for through `prisma`, so a step that needs
+   * session lifecycle work calls the service that owns the rules — the same
+   * reason this module contributes steps instead of implementing business
+   * logic itself.
+   */
+  sessions: SessionService;
 }
 
 export interface EodStepResult {
@@ -150,11 +158,63 @@ const verifyDayClosing: EodStep = {
   },
 };
 
+/**
+ * Delete dead session rows that are past the retention window.
+ *
+ * # The one step here that writes, and why that is consistent
+ *
+ * Every other step is read-only because the rule this module observes is that
+ * *the ledger* belongs to the module that owns it — a maintenance screen must
+ * not become a second, unaudited path into financial data. `user_sessions` is
+ * not financial data, and this deletes nothing a person could otherwise act on:
+ * only rows for sessions that are already over.
+ *
+ * # Why it belongs on the EOD run at all
+ *
+ * Rotation writes a session row on every refresh, so the table grows with
+ * traffic and is read on every authenticated request. Nothing else in this
+ * application runs on a schedule, and EOD is the schedule that exists.
+ *
+ * # Idempotent, as every step must be
+ *
+ * It deletes by an absolute cutoff rather than by a count, so a retry deletes
+ * what is still eligible and finds nothing the second time — the
+ * recompute-from-source shape, not `count = count + n`.
+ *
+ * Bounded per run: one pass of at most `PRUNE_LIMIT`, so a first run against a
+ * long-grown table cannot hold a lock over the whole backlog. The remainder is
+ * taken by tomorrow's run.
+ */
+const PRUNE_LIMIT = 5000;
+
+const pruneDeadSessions: EodStep = {
+  code: 'EOD_PRUNE_DEAD_SESSIONS',
+  sequence: 40,
+  description: 'Delete revoked and expired session rows past retention.',
+  retryable: true,
+  async run({ prisma, sessions }) {
+    // Org-wide by construction: sessions are pruned by age, and a branch-scoped
+    // run has no narrower claim to make about them. Running it once per branch
+    // would simply find nothing left after the first.
+    void prisma;
+    const processed = await sessions.pruneDeadSessions(PRUNE_LIMIT);
+
+    return {
+      processed,
+      summary:
+        processed === PRUNE_LIMIT
+          ? `${processed} session row(s) removed; more remain for the next run`
+          : `${processed} session row(s) removed`,
+    };
+  },
+};
+
 /** Ordered by `sequence` at execution time, not by array position. */
 export const EOD_STEPS: readonly EodStep[] = [
   snapshotOpenLoans,
   reviewOverdue,
   verifyDayClosing,
+  pruneDeadSessions,
 ];
 
 export function eodStepsInOrder(): EodStep[] {

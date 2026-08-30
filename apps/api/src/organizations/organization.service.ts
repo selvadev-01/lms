@@ -8,6 +8,8 @@ import type { LifecycleStatus, OrganizationDetail } from '@lms/types';
 
 import { AuditAction, AuditService } from '../audit/audit.service';
 import type { RequestMeta } from '../auth/auth.service';
+import { SESSION_REVOKE_REASON } from '../auth/session-state';
+import { SessionService } from '../auth/session.service';
 import type { AuthContext } from '../common/auth-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { SetStatusDto } from './dto/set-status.dto';
@@ -70,6 +72,7 @@ export class OrganizationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly sessions: SessionService,
   ) {}
 
   /** Scenarios 1, 2 — read, and log the read. */
@@ -246,6 +249,27 @@ export class OrganizationService {
 
       return row;
     });
+
+    if (deactivating) {
+      /**
+       * Outside the transaction, as user deactivation does it: a revocation
+       * failure must not undo a committed deactivation.
+       *
+       * Necessary because per-request authorization re-reads the user's status
+       * but not the organization's. Without this, everyone in a deactivated
+       * tenant keeps working until their 15-minute access token lapses and the
+       * refresh path — the only place that checks org status — refuses them.
+       */
+      await this.sessions
+        .revokeAllForOrg(actor.orgId, SESSION_REVOKE_REASON.ORG_INACTIVE)
+        .catch((error: unknown) => {
+          this.logger.error(
+            `Deactivated organization ${actor.orgId} but failed to revoke its sessions: ${
+              error instanceof Error ? error.message : 'unknown error'
+            }`,
+          );
+        });
+    }
 
     return toDetail(updated);
   }

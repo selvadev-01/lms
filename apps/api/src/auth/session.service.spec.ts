@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'node:crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SESSION_REVOKE_REASON } from './session-state';
@@ -28,6 +29,7 @@ const CONFIG_VALUES: Record<string, unknown> = {
   'auth.sessionActivityWriteSeconds': 60,
   'auth.refreshTokenTtlDays': 7,
   'auth.maxConcurrentSessions': 0,
+  'auth.sessionRetentionDays': 90,
 };
 
 const config = {
@@ -77,9 +79,26 @@ function matches(row: SessionRow, where: Record<string, unknown>): boolean {
   for (const [key, condition] of Object.entries(where)) {
     if (condition === undefined) continue;
 
+    // `OR` is a list of alternative wheres — the pruning query is expressed as
+    // "revoked long ago OR expired long ago", and as a list of composite keys.
+    if (key === 'OR' && Array.isArray(condition)) {
+      const alternatives = condition as Array<Record<string, unknown>>;
+      if (!alternatives.some((clause) => matches(row, clause))) return false;
+      continue;
+    }
+
     if (key === 'revokedAt') {
       if (condition === null) {
         if (row.revokedAt !== null) return false;
+        continue;
+      }
+      // `{ lt: cutoff }` — a row revoked before the retention cutoff. An
+      // unrevoked row has no date and can never satisfy it.
+      if (typeof condition === 'object') {
+        const clause = condition as { lt?: Date };
+        if (!clause.lt) return false;
+        if (!row.revokedAt) return false;
+        if (row.revokedAt.getTime() >= clause.lt.getTime()) return false;
         continue;
       }
       return false;
@@ -96,8 +115,11 @@ function matches(row: SessionRow, where: Record<string, unknown>): boolean {
     }
 
     if (key === 'expiresAt' && typeof condition === 'object' && condition) {
-      const clause = condition as { gt?: Date };
+      const clause = condition as { gt?: Date; lt?: Date };
       if (clause.gt && row.expiresAt.getTime() <= clause.gt.getTime()) {
+        return false;
+      }
+      if (clause.lt && row.expiresAt.getTime() >= clause.lt.getTime()) {
         return false;
       }
       continue;
@@ -140,13 +162,23 @@ class FakeDb {
         where,
         select,
       }: {
-        where: { orgId_sessionId: { orgId: string; sessionId: string } };
+        where: {
+          orgId_sessionId?: { orgId: string; sessionId: string };
+          // The refresh-token hash is globally unique rather than org-scoped,
+          // so a token resolves without knowing which tenant issued it.
+          refreshTokenHash?: string;
+        };
         select?: Record<string, boolean>;
       }) => {
         const key = where.orgId_sessionId;
-        const found = this.rows.find(
-          (row) => row.orgId === key.orgId && row.sessionId === key.sessionId,
-        );
+        const found = key
+          ? this.rows.find(
+              (row) =>
+                row.orgId === key.orgId && row.sessionId === key.sessionId,
+            )
+          : this.rows.find(
+              (row) => row.refreshTokenHash === where.refreshTokenHash,
+            );
         return Promise.resolve(found ? project(found, select) : null);
       },
     ),
@@ -155,17 +187,29 @@ class FakeDb {
       ({
         where,
         select,
+        take,
       }: {
         where: Record<string, unknown>;
         select?: Record<string, boolean>;
+        // Honoured because the prune relies on it to bound one call's work; a
+        // fake that ignored it would let that test pass with an unbounded query.
+        take?: number;
       }) => {
         const found = this.rows
           .filter((row) => matches(row, where))
           .sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime())
           .map((row) => project(row, select));
-        return Promise.resolve(found);
+        return Promise.resolve(
+          take === undefined ? found : found.slice(0, take),
+        );
       },
     ),
+
+    deleteMany: jest.fn(({ where }: { where: Record<string, unknown> }) => {
+      const before = this.rows.length;
+      this.rows = this.rows.filter((row) => !matches(row, where));
+      return Promise.resolve({ count: before - this.rows.length });
+    }),
 
     updateMany: jest.fn(
       ({
@@ -535,6 +579,114 @@ describe('SessionService', () => {
       const found = await service.findForAdmin(OTHER_ORG_ID, SESSION_ID);
 
       expect(found).toBeNull();
+    });
+  });
+
+  /**
+   * Refresh-token reuse detection.
+   *
+   * Rotation on its own only refuses the replay. What makes rotation worth
+   * anything is noticing that a *spent* token came back at all, which is only
+   * possible if "already rotated" stays distinguishable from "no such token" —
+   * the distinction `findActiveByRefreshToken` collapses.
+   */
+  describe('classifyRefreshToken', () => {
+    /** The service hashes the raw token, so fixtures must store the hash. */
+    const RAW_TOKEN = 'a-refresh-token';
+    const hashOf = (raw: string) =>
+      createHash('sha256').update(raw).digest('hex');
+
+    beforeEach(() => {
+      db.reset([{ ...sessionRow(), refreshTokenHash: hashOf(RAW_TOKEN) }]);
+    });
+
+    it('reports a live token as active', async () => {
+      const result = await service.classifyRefreshToken(RAW_TOKEN);
+
+      expect(result.kind).toBe('active');
+    });
+
+    it('reports a token nobody issued as unknown', async () => {
+      const result = await service.classifyRefreshToken('never-issued');
+
+      expect(result).toEqual({ kind: 'unknown' });
+    });
+
+    it('reports a rotated token as reused', async () => {
+      db.rows[0].revokedAt = new Date();
+      db.rows[0].revokedReason = SESSION_REVOKE_REASON.ROTATED;
+
+      const result = await service.classifyRefreshToken(RAW_TOKEN);
+
+      expect(result.kind).toBe('reused');
+    });
+
+    /**
+     * The distinction that keeps this from crying wolf. A session the user
+     * ended themselves is simply over; presenting its token again is what a
+     * stale browser tab does, not what an attacker does. Treating it as theft
+     * would revoke every session of anyone who logs out with a tab still open.
+     */
+    it.each([
+      SESSION_REVOKE_REASON.USER_LOGOUT,
+      SESSION_REVOKE_REASON.ADMIN_REVOKED,
+      SESSION_REVOKE_REASON.PASSWORD_CHANGE,
+      SESSION_REVOKE_REASON.IDLE_TIMEOUT,
+    ])('does not treat a session ended by %s as reuse', async (reason) => {
+      db.rows[0].revokedAt = new Date();
+      db.rows[0].revokedReason = reason;
+
+      const result = await service.classifyRefreshToken(RAW_TOKEN);
+
+      expect(result).toEqual({ kind: 'unknown' });
+    });
+
+    /** Expired is aged out, never spent — so it is not evidence of a replay. */
+    it('does not treat an expired token as reuse', async () => {
+      db.rows[0].expiresAt = new Date(Date.now() - 1000);
+
+      const result = await service.classifyRefreshToken(RAW_TOKEN);
+
+      expect(result).toEqual({ kind: 'unknown' });
+    });
+  });
+
+  /**
+   * Rotation writes a row per refresh and revokes the old one, so this table
+   * only ever grew — and it is read on every authenticated request. These tests
+   * pin the two things that make pruning safe: it deletes only sessions that are
+   * already over, and it never touches a live one.
+   */
+  describe('pruneDeadSessions', () => {
+    const ANCIENT = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
+
+    it('deletes a long-revoked session', async () => {
+      db.rows[0].revokedAt = ANCIENT;
+      db.rows[0].revokedReason = SESSION_REVOKE_REASON.ROTATED;
+
+      expect(await service.pruneDeadSessions()).toBe(1);
+      expect(db.rows).toHaveLength(0);
+    });
+
+    it('deletes a long-expired session', async () => {
+      db.rows[0].expiresAt = ANCIENT;
+
+      expect(await service.pruneDeadSessions()).toBe(1);
+      expect(db.rows).toHaveLength(0);
+    });
+
+    /** The whole point: pruning must never be able to sign anybody out. */
+    it('leaves a live session alone', async () => {
+      expect(await service.pruneDeadSessions()).toBe(0);
+      expect(db.rows).toHaveLength(1);
+    });
+
+    /** Recently dead rows are still the evidence an investigation needs. */
+    it('leaves a recently revoked session alone', async () => {
+      db.rows[0].revokedAt = new Date(Date.now() - 60_000);
+
+      expect(await service.pruneDeadSessions()).toBe(0);
+      expect(db.rows).toHaveLength(1);
     });
   });
 });

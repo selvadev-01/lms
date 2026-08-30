@@ -4,6 +4,7 @@ import { changePasswordSchema } from "@lms/validation";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { CSRF_HEADERS } from "@/lib/api-call";
 import { env } from "@/lib/env";
 import { ACCESS_COOKIE, REFRESH_COOKIE } from "../api/session";
 
@@ -88,6 +89,7 @@ export async function changePasswordAction(
       {
         method: "POST",
         headers: {
+          ...CSRF_HEADERS,
           "Content-Type": "application/json",
           // Forwarding the session cookie IS the authentication: the API's
           // JwtAuthGuard reads the access token from it.

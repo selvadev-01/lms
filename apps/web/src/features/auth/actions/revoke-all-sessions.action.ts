@@ -4,8 +4,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+import { CSRF_HEADERS } from "@/lib/api-call";
 import { env } from "@/lib/env";
-import { ACCESS_COOKIE, REFRESH_COOKIE } from "../api/session";
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  forgetCachedSession,
+} from "../api/session";
 import type { RevokeSessionState } from "./revoke-session.action";
 
 const RATE_LIMITED = "Too many attempts. Please wait a moment and try again.";
@@ -37,7 +42,7 @@ export async function revokeAllSessionsAction(
       `${env.API_BASE_URL}/api/v1/auth/sessions/revoke-all`,
       {
         method: "POST",
-        headers: { cookie: cookieStore.toString() },
+        headers: { ...CSRF_HEADERS, cookie: cookieStore.toString() },
         cache: "no-store",
       },
     );
@@ -57,6 +62,7 @@ export async function revokeAllSessionsAction(
   }
 
   if (outcome === "session-ended") {
+    forgetCachedSession(cookieStore.get(ACCESS_COOKIE)?.value);
     cookieStore.delete(ACCESS_COOKIE);
     cookieStore.delete(REFRESH_COOKIE);
     redirect("/signin");

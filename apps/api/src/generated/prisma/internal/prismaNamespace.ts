@@ -460,6 +460,7 @@ export const ModelName = {
   DayClosing: 'DayClosing',
   CashBookEntry: 'CashBookEntry',
   AuditLog: 'AuditLog',
+  UntenantedAuditLog: 'UntenantedAuditLog',
   SmsProviderConfig: 'SmsProviderConfig',
   EmailProviderConfig: 'EmailProviderConfig',
   NotificationSourceEvent: 'NotificationSourceEvent',
@@ -495,7 +496,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "organization" | "branch" | "user" | "role" | "permission" | "rolePermission" | "userRole" | "userSession" | "passwordRecoveryRequest" | "passwordHistory" | "gpsCheckIn" | "lead" | "customer" | "customerAddress" | "customerDocument" | "customerKyc" | "customerMobileVerification" | "guarantor" | "guarantorDocument" | "loanProduct" | "loanScheme" | "loanSchemeDuration" | "interestConfig" | "loanApplication" | "loanApplicationDocument" | "loanApplicationReview" | "creditAssessment" | "sanctionLetter" | "loan" | "loanGuarantor" | "repaymentSchedule" | "emi" | "disbursement" | "collection" | "collectionAllocation" | "collectionVerification" | "penaltyRule" | "penaltyRuleOverride" | "loanPenaltyRuleOverride" | "penalty" | "penaltyAction" | "fieldAssignment" | "fieldAssignmentCustomer" | "fieldVisit" | "offlineSyncItem" | "cashHandover" | "cashReconciliation" | "recoveryCase" | "recoveryCaseAssignment" | "recoveryAction" | "legalNotice" | "settlement" | "loanClosure" | "noc" | "receipt" | "account" | "accountDimension" | "journalEntry" | "journalLine" | "expenseCategory" | "expense" | "dayClosing" | "cashBookEntry" | "auditLog" | "smsProviderConfig" | "emailProviderConfig" | "notificationSourceEvent" | "notificationTemplate" | "notificationEventRule" | "notification" | "notificationDelivery" | "notificationPreference" | "reportDefinition" | "reportRun" | "reportDelivery" | "masterDataValue" | "setting" | "settingChangeRequest" | "businessCalendar" | "calendarHoliday" | "maintenanceJobRun" | "maintenanceJobStep" | "maintenanceMode" | "retentionPolicy"
+    modelProps: "organization" | "branch" | "user" | "role" | "permission" | "rolePermission" | "userRole" | "userSession" | "passwordRecoveryRequest" | "passwordHistory" | "gpsCheckIn" | "lead" | "customer" | "customerAddress" | "customerDocument" | "customerKyc" | "customerMobileVerification" | "guarantor" | "guarantorDocument" | "loanProduct" | "loanScheme" | "loanSchemeDuration" | "interestConfig" | "loanApplication" | "loanApplicationDocument" | "loanApplicationReview" | "creditAssessment" | "sanctionLetter" | "loan" | "loanGuarantor" | "repaymentSchedule" | "emi" | "disbursement" | "collection" | "collectionAllocation" | "collectionVerification" | "penaltyRule" | "penaltyRuleOverride" | "loanPenaltyRuleOverride" | "penalty" | "penaltyAction" | "fieldAssignment" | "fieldAssignmentCustomer" | "fieldVisit" | "offlineSyncItem" | "cashHandover" | "cashReconciliation" | "recoveryCase" | "recoveryCaseAssignment" | "recoveryAction" | "legalNotice" | "settlement" | "loanClosure" | "noc" | "receipt" | "account" | "accountDimension" | "journalEntry" | "journalLine" | "expenseCategory" | "expense" | "dayClosing" | "cashBookEntry" | "auditLog" | "untenantedAuditLog" | "smsProviderConfig" | "emailProviderConfig" | "notificationSourceEvent" | "notificationTemplate" | "notificationEventRule" | "notification" | "notificationDelivery" | "notificationPreference" | "reportDefinition" | "reportRun" | "reportDelivery" | "masterDataValue" | "setting" | "settingChangeRequest" | "businessCalendar" | "calendarHoliday" | "maintenanceJobRun" | "maintenanceJobStep" | "maintenanceMode" | "retentionPolicy"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -5235,6 +5236,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    UntenantedAuditLog: {
+      payload: Prisma.$UntenantedAuditLogPayload<ExtArgs>
+      fields: Prisma.UntenantedAuditLogFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UntenantedAuditLogFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UntenantedAuditLogFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>
+        }
+        findFirst: {
+          args: Prisma.UntenantedAuditLogFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UntenantedAuditLogFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>
+        }
+        findMany: {
+          args: Prisma.UntenantedAuditLogFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>[]
+        }
+        create: {
+          args: Prisma.UntenantedAuditLogCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>
+        }
+        createMany: {
+          args: Prisma.UntenantedAuditLogCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UntenantedAuditLogCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>[]
+        }
+        delete: {
+          args: Prisma.UntenantedAuditLogDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>
+        }
+        update: {
+          args: Prisma.UntenantedAuditLogUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>
+        }
+        deleteMany: {
+          args: Prisma.UntenantedAuditLogDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UntenantedAuditLogUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UntenantedAuditLogUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>[]
+        }
+        upsert: {
+          args: Prisma.UntenantedAuditLogUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UntenantedAuditLogPayload>
+        }
+        aggregate: {
+          args: Prisma.UntenantedAuditLogAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUntenantedAuditLog>
+        }
+        groupBy: {
+          args: Prisma.UntenantedAuditLogGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UntenantedAuditLogGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UntenantedAuditLogCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UntenantedAuditLogCountAggregateOutputType> | number
+        }
+      }
+    }
     SmsProviderConfig: {
       payload: Prisma.$SmsProviderConfigPayload<ExtArgs>
       fields: Prisma.SmsProviderConfigFieldRefs
@@ -6807,6 +6882,7 @@ export const UserScalarFieldEnum = {
   lockedUntil: 'lockedUntil',
   lastLoginAt: 'lastLoginAt',
   passwordChangedAt: 'passwordChangedAt',
+  mustChangePassword: 'mustChangePassword',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -7993,6 +8069,21 @@ export const AuditLogScalarFieldEnum = {
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
 
 
+export const UntenantedAuditLogScalarFieldEnum = {
+  auditId: 'auditId',
+  occurredAt: 'occurredAt',
+  action: 'action',
+  orgCode: 'orgCode',
+  maskedMobile: 'maskedMobile',
+  requestId: 'requestId',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent',
+  metadata: 'metadata'
+} as const
+
+export type UntenantedAuditLogScalarFieldEnum = (typeof UntenantedAuditLogScalarFieldEnum)[keyof typeof UntenantedAuditLogScalarFieldEnum]
+
+
 export const SmsProviderConfigScalarFieldEnum = {
   orgId: 'orgId',
   configId: 'configId',
@@ -8555,6 +8646,13 @@ export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel,
 
 
 /**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
  * Reference to a field of type 'RoleStatus'
  */
 export type EnumRoleStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoleStatus'>
@@ -8565,13 +8663,6 @@ export type EnumRoleStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Prism
  * Reference to a field of type 'RoleStatus[]'
  */
 export type ListEnumRoleStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoleStatus[]'>
-    
-
-
-/**
- * Reference to a field of type 'Boolean'
- */
-export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
     
 
 
@@ -10077,6 +10168,7 @@ export type GlobalOmitConfig = {
   dayClosing?: Prisma.DayClosingOmit
   cashBookEntry?: Prisma.CashBookEntryOmit
   auditLog?: Prisma.AuditLogOmit
+  untenantedAuditLog?: Prisma.UntenantedAuditLogOmit
   smsProviderConfig?: Prisma.SmsProviderConfigOmit
   emailProviderConfig?: Prisma.EmailProviderConfigOmit
   notificationSourceEvent?: Prisma.NotificationSourceEventOmit

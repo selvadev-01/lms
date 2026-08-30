@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuthModule } from '../auth/auth.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { EmployeeController } from './user/employee.controller';
 import { PermissionController } from './rbac/permission.controller';
@@ -19,11 +20,14 @@ import { UserService } from './user/user.service';
  *
  * Imports `OrganizationsModule` for `BranchService`, so the rule that a branch
  * must be operational before it receives anything (Module 02 Scenario 16) is
- * asked of the module that owns it rather than reimplemented here. Everything
- * else it needs — Prisma, Audit, Authorization, Session — is `@Global()`.
+ * asked of the module that owns it rather than reimplemented here, and
+ * `AuthModule` for `PasswordService`/`PasswordPolicyService`, so an
+ * administrator-set first password is hashed and policy-checked by the module
+ * that owns credentials (Rule 48) rather than here. Everything else it needs —
+ * Prisma, Audit, Authorization, Session — is `@Global()`.
  */
 @Module({
-  imports: [OrganizationsModule],
+  imports: [OrganizationsModule, AuthModule],
   controllers: [
     RoleController,
     PermissionController,

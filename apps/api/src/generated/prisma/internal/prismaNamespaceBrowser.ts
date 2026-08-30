@@ -114,6 +114,7 @@ export const ModelName = {
   DayClosing: 'DayClosing',
   CashBookEntry: 'CashBookEntry',
   AuditLog: 'AuditLog',
+  UntenantedAuditLog: 'UntenantedAuditLog',
   SmsProviderConfig: 'SmsProviderConfig',
   EmailProviderConfig: 'EmailProviderConfig',
   NotificationSourceEvent: 'NotificationSourceEvent',
@@ -205,6 +206,7 @@ export const UserScalarFieldEnum = {
   lockedUntil: 'lockedUntil',
   lastLoginAt: 'lastLoginAt',
   passwordChangedAt: 'passwordChangedAt',
+  mustChangePassword: 'mustChangePassword',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -1389,6 +1391,21 @@ export const AuditLogScalarFieldEnum = {
 } as const
 
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const UntenantedAuditLogScalarFieldEnum = {
+  auditId: 'auditId',
+  occurredAt: 'occurredAt',
+  action: 'action',
+  orgCode: 'orgCode',
+  maskedMobile: 'maskedMobile',
+  requestId: 'requestId',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent',
+  metadata: 'metadata'
+} as const
+
+export type UntenantedAuditLogScalarFieldEnum = (typeof UntenantedAuditLogScalarFieldEnum)[keyof typeof UntenantedAuditLogScalarFieldEnum]
 
 
 export const SmsProviderConfigScalarFieldEnum = {

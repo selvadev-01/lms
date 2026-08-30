@@ -1,4 +1,5 @@
 import type { ReportMeta } from "@lms/types";
+import DateField from "@/components/form/DateField";
 
 /**
  * The filter bar every tabular report carries.
@@ -49,12 +50,11 @@ export default function ReportFilters({
           >
             From
           </label>
-          <input
+          <DateField
             id="report-from"
             name="fromDate"
-            type="date"
             defaultValue={fromDate}
-            className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
+            bare
           />
         </div>
 
@@ -65,12 +65,11 @@ export default function ReportFilters({
           >
             To
           </label>
-          <input
+          <DateField
             id="report-to"
             name="toDate"
-            type="date"
             defaultValue={toDate}
-            className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
+            bare
           />
         </div>
 

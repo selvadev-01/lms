@@ -623,6 +623,22 @@ export type CashBookEntry = Prisma.CashBookEntryModel
  */
 export type AuditLog = Prisma.AuditLogModel
 /**
+ * Model UntenantedAuditLog
+ * Security events that belong to no tenant.
+ * 
+ * `audit_logs` cannot hold these: `org_id` is half its primary key AND a
+ * foreign key to `organizations`, so an event whose whole point is that no
+ * organization resolved has nowhere to go. They were written to the
+ * application log only — which meant credential stuffing against invented
+ * organization codes left no queryable trail, and the one class of attack that
+ * probes the tenant boundary was the one class invisible to the audit screens.
+ * 
+ * Deliberately NOT related to `organizations`. The `org_code` here is an
+ * attacker-supplied string that usually matches nothing; making it a foreign
+ * key would recreate exactly the constraint that forced the omission.
+ */
+export type UntenantedAuditLog = Prisma.UntenantedAuditLogModel
+/**
  * Model SmsProviderConfig
  * Which SMS gateway an organization uses, and how to address it.
  * 

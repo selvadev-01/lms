@@ -154,6 +154,20 @@ export const AuditAction = {
   ORG_DEACTIVATED: 'ORG_DEACTIVATED',
   ORG_UPDATE_FAILED: 'ORG_UPDATE_FAILED',
 
+  // --- Organization signup -------------------------------------------------
+  //
+  // Written inside the provisioning transaction, scoped to the organization it
+  // creates, with the Super Admin it mints as its own actor. That
+  // self-reference is the honest record: nobody else existed to perform it.
+  //
+  // OPEN-QUESTIONS §8 records an objection to organization-create having no
+  // orgId to scope its audit against. That describes a cross-tenant
+  // administrator, who belongs to a different organization than the one being
+  // created; it does not apply to a path that mints its own actor. Leaving the
+  // row out instead would begin every organization's trail with an unexplained
+  // gap where its own creation was.
+  ORG_SIGNUP_COMPLETED: 'ORG_SIGNUP_COMPLETED',
+
   BRANCH_LISTED: 'BRANCH_LISTED',
   BRANCH_VIEWED: 'BRANCH_VIEWED',
   BRANCH_CREATED: 'BRANCH_CREATED',
@@ -188,6 +202,17 @@ export const AuditAction = {
   AUTHZ_RESOLUTION_FAILED: 'AUTHZ_RESOLUTION_FAILED',
   /** A live session whose user row no longer exists. */
   AUTHZ_USER_MISSING: 'AUTHZ_USER_MISSING',
+  /**
+   * The account is still on a password an administrator chose, and asked for
+   * something other than changing it.
+   *
+   * Recorded rather than silently redirected: an account reaching well past the
+   * change-password screen while confined is worth being able to see, because
+   * it means either a client ignoring the redirect or someone using the
+   * borrowed credential directly against the API.
+   */
+  AUTHZ_DENIED_PASSWORD_CHANGE_REQUIRED:
+    'AUTHZ_DENIED_PASSWORD_CHANGE_REQUIRED',
 
   USER_LISTED: 'USER_LISTED',
   USER_VIEWED: 'USER_VIEWED',
@@ -1171,10 +1196,27 @@ export function sanitizeMetadata(
   if (!metadata) return undefined;
 
   const safe: Record<string, unknown> = {};
+  const dropped: string[] = [];
+
   for (const [key, value] of Object.entries(metadata)) {
-    if (SENSITIVE_KEY.test(key)) continue;
+    if (SENSITIVE_KEY.test(key)) {
+      dropped.push(key);
+      continue;
+    }
     safe[key] = value;
   }
+
+  /**
+   * Names what was removed, so the removal is visible in the record itself.
+   *
+   * Dropping silently is the hazard the note above describes: a contributor who
+   * does not know the `recoveryRef` convention writes `tokenId`, the field never
+   * appears, and the audit trail is quietly poorer than it looks with nothing
+   * anywhere to say so. The *key names* are safe to record — it is the values
+   * this function exists to keep out, and they are still discarded.
+   */
+  if (dropped.length > 0) safe.redactedKeys = dropped;
+
   return safe;
 }
 
@@ -1242,9 +1284,13 @@ export class AuditService {
    *
    * When the submitted organization code matches no organization there is no
    * `orgId`, and `orgId` is both part of the audit primary key and a foreign
-   * key — so no row can exist. Such attempts are recorded to the application
-   * log instead. This is a documented deviation from "every attempt is audit
-   * logged"; the story assumes a resolvable tenant.
+   * key — so no row can exist there.
+   *
+   * These attempts go to `untenanted_audit_logs`, which carries no organization
+   * reference for exactly this reason, *and* to the application log. Before that
+   * table existed the log was the only record, which left credential stuffing
+   * against invented organization codes with no queryable trail — the one attack
+   * that probes the tenant boundary was the one nothing could report on.
    */
   recordUnresolvableTenant(details: {
     orgCode: string;
@@ -1257,5 +1303,78 @@ export class AuditService {
       event: 'AUTH_LOGIN_UNKNOWN_ORG',
       ...details,
     });
+    this.recordUntenanted('AUTH_LOGIN_UNKNOWN_ORG', details);
+  }
+
+  /**
+   * A signup that never created an organization, on the same reasoning as
+   * `recordUnresolvableTenant` above: there is no `orgId` to scope the row
+   * against, because the rejection is precisely that no organization came into
+   * existence. Recorded to the application log instead.
+   *
+   * The IP matters here more than in most rejections — it is the only handle on
+   * someone probing for unclaimed organization codes.
+   */
+  recordSignupRejected(details: {
+    orgCode: string;
+    reason: string;
+    requestId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): void {
+    this.logger.warn({
+      event: 'ORG_SIGNUP_REJECTED',
+      ...details,
+    });
+    this.recordUntenanted('ORG_SIGNUP_REJECTED', details);
+  }
+
+  /**
+   * Writes the untenanted counterpart of the two log lines above.
+   *
+   * The application log is kept as well as this, not replaced by it: the log is
+   * what an operator tails live, and this is what survives to be *queried* —
+   * "every attempt from this address in the last hour" is not a question a log
+   * file answers well, and it is the question these events exist for.
+   *
+   * Fire-and-forget, and its failure is swallowed. Auditing must never be able
+   * to convert a rejection into an error the caller can distinguish: if this
+   * threw, an attacker could tell a real organization code from an invented one
+   * by which request 500s — which is precisely the enumeration oracle the
+   * constant response text elsewhere in this flow exists to deny.
+   */
+  private recordUntenanted(
+    action: string,
+    details: {
+      orgCode?: string;
+      maskedMobile?: string;
+      reason?: string;
+      requestId?: string;
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ): void {
+    void this.prisma.untenantedAuditLog
+      .create({
+        data: {
+          action,
+          // Truncated to the column width rather than rejected: the value is
+          // attacker-supplied, and losing an over-long code is better than
+          // losing the whole record of the attempt.
+          orgCode: details.orgCode?.slice(0, 100) ?? null,
+          maskedMobile: details.maskedMobile ?? null,
+          requestId: details.requestId ?? null,
+          ipAddress: details.ipAddress ?? null,
+          userAgent: details.userAgent ?? null,
+          metadata: details.reason ? { reason: details.reason } : undefined,
+        },
+      })
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Failed to write untenanted audit ${action}: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`,
+        );
+      });
   }
 }

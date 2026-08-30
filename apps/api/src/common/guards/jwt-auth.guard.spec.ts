@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
 
 import { AuditAction, AuditService } from '../../audit/audit.service';
@@ -44,6 +44,7 @@ const TOKEN_PAYLOAD = {
 };
 
 interface FakeRequest {
+  path?: string;
   cookies: Record<string, string | undefined>;
   user?: AuthContext;
   requestId?: string;
@@ -54,6 +55,7 @@ interface FakeRequest {
 
 function buildRequest(overrides: Partial<FakeRequest> = {}): FakeRequest {
   return {
+    path: '/api/v1/customers',
     cookies: { lms_at: 'signed.access.token' },
     requestId: '66666666-6666-6666-6666-666666666666',
     ip: '203.0.113.7',
@@ -563,6 +565,91 @@ describe('JwtAuthGuard', () => {
       await guard.canActivate(buildContext(request));
 
       expect(request.user?.branchId).toBeNull();
+    });
+  });
+  describe('an administrator-set password still in force', () => {
+    /** ACTIVE and authorized, but confined until the borrowed password goes. */
+    function confined() {
+      resolve.mockResolvedValue({
+        status: 'ACTIVE',
+        branchId: BRANCH_ID,
+        roles: ['BRANCH_ADMIN'],
+        permissions: ['dashboard.view'],
+        mustChangePassword: true,
+      });
+    }
+
+    it('refuses an ordinary request with 403, not 401', async () => {
+      // 401 would send a browser back to sign in, which would succeed and land
+      // it here again — a loop. The caller IS authenticated; that is the point.
+      confined();
+
+      await expect(
+        guard.canActivate(
+          buildContext(buildRequest({ path: '/api/v1/customers' })),
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('records the denial with the path that was attempted', async () => {
+      confined();
+
+      await guard
+        .canActivate(buildContext(buildRequest({ path: '/api/v1/customers' })))
+        .catch(() => undefined);
+
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: AuditAction.AUTHZ_DENIED_PASSWORD_CHANGE_REQUIRED,
+          metadata: { path: '/api/v1/customers' },
+        }),
+      );
+    });
+
+    it.each([
+      ['/api/v1/auth/change-password', 'the way out'],
+      ['/api/v1/auth/me', 'how the client learns it must change'],
+      ['/api/v1/auth/sign-out', 'so the account is confined, not trapped'],
+    ])('allows %s — %s', async (path) => {
+      confined();
+
+      await expect(
+        guard.canActivate(buildContext(buildRequest({ path }))),
+      ).resolves.toBe(true);
+    });
+
+    it('ignores a trailing slash rather than letting it bypass the gate', async () => {
+      confined();
+
+      await expect(
+        guard.canActivate(
+          buildContext(buildRequest({ path: '/api/v1/auth/change-password/' })),
+        ),
+      ).resolves.toBe(true);
+    });
+
+    it('refuses a path it cannot read, rather than throwing', async () => {
+      confined();
+
+      await expect(
+        guard.canActivate(buildContext(buildRequest({ path: undefined }))),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('lets an account whose password is its own through untouched', async () => {
+      resolve.mockResolvedValue({
+        status: 'ACTIVE',
+        branchId: BRANCH_ID,
+        roles: ['BRANCH_ADMIN'],
+        permissions: ['dashboard.view'],
+        mustChangePassword: false,
+      });
+
+      await expect(
+        guard.canActivate(
+          buildContext(buildRequest({ path: '/api/v1/customers' })),
+        ),
+      ).resolves.toBe(true);
     });
   });
 });

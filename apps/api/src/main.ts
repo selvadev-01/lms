@@ -16,6 +16,29 @@ async function bootstrap() {
   app.use(cookieParser());
   app.setGlobalPrefix('api/v1');
 
+  /**
+   * How many reverse proxies sit in front of this process.
+   *
+   * Express derives `req.ip` from the right-hand end of `X-Forwarded-For`,
+   * counting back this many hops. It matters twice over:
+   *
+   *  - **The rate limiter keys on `req.ip`.** Left at 0 behind a load balancer,
+   *    every request appears to come from the balancer, so one caller's traffic
+   *    exhausts the per-IP budget for everyone and the limits protect nothing.
+   *  - **Audit records store it.** A failed sign-in attributed to the balancer
+   *    cannot be traced to whoever actually made it.
+   *
+   * Deliberately a count and not `true`: `true` trusts the whole chain, so a
+   * client can prepend any `X-Forwarded-For` it likes and choose its own
+   * apparent address — which forges exactly the two things above. The default
+   * of 0 is correct for a directly exposed process; a deployment behind one
+   * proxy sets 1.
+   */
+  const proxyHops = config.get<number>('auth.trustedProxyHops') ?? 0;
+  if (proxyHops > 0) {
+    app.getHttpAdapter().getInstance().set('trust proxy', proxyHops);
+  }
+
   app.enableCors({
     origin: config.get<string>('auth.webOrigin'),
     credentials: true,

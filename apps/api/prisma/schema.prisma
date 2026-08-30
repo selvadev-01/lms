@@ -1533,6 +1533,16 @@ model User {
   /// audited (Forgot Password Scenario 39) without recording the password
   /// itself. Null for accounts that have never had a password set.
   passwordChangedAt   DateTime?  @map("password_changed_at") @db.Timestamptz(6)
+  /// True while a password someone else chose is still in force.
+  ///
+  /// An administrator creating an account may set its first password, which
+  /// means that password is known to two people. This flag confines that window:
+  /// the account can sign in and reach nothing but Change Password until it is
+  /// replaced, enforced in JwtAuthGuard rather than only in the browser.
+  ///
+  /// False for a self-chosen password — organization signup, a recovery reset,
+  /// or a change the user made themselves — because nobody else ever saw it.
+  mustChangePassword  Boolean    @default(false) @map("must_change_password")
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -4080,6 +4090,44 @@ model AuditLog {
   /// The `action` and `result` filters of Scenario 38.
   @@index([orgId, action, occurredAt])
   @@map("audit_logs")
+}
+
+/// Security events that belong to no tenant.
+///
+/// `audit_logs` cannot hold these: `org_id` is half its primary key AND a
+/// foreign key to `organizations`, so an event whose whole point is that no
+/// organization resolved has nowhere to go. They were written to the
+/// application log only — which meant credential stuffing against invented
+/// organization codes left no queryable trail, and the one class of attack that
+/// probes the tenant boundary was the one class invisible to the audit screens.
+///
+/// Deliberately NOT related to `organizations`. The `org_code` here is an
+/// attacker-supplied string that usually matches nothing; making it a foreign
+/// key would recreate exactly the constraint that forced the omission.
+model UntenantedAuditLog {
+  auditId    String   @default(uuid()) @map("audit_id") @db.Uuid
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  action     String   @db.VarChar(150)
+
+  /// As typed by the caller: unvalidated, unresolved, and length-capped so a
+  /// caller cannot write an unbounded string into this table.
+  orgCode String? @map("org_code") @db.VarChar(100)
+
+  /// Masked at the call site (`98XXXXXX10`). A failed attempt must stay
+  /// traceable without storing the identifier of a non-consenting third party.
+  maskedMobile String? @map("masked_mobile") @db.VarChar(20)
+
+  requestId String? @map("request_id") @db.Uuid
+  ipAddress String? @map("ip_address") @db.Inet
+  userAgent String? @map("user_agent")
+  metadata  Json?
+
+  @@id([auditId])
+  /// "What came from this address" — the question this table exists to answer.
+  @@index([ipAddress, occurredAt])
+  @@index([occurredAt])
+  @@index([action, occurredAt])
+  @@map("untenanted_audit_logs")
 }
 
 // ============================================================================

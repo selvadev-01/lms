@@ -23,9 +23,15 @@ import { trim } from '../../../common/transforms/trim';
  * structural rather than a check someone could forget to write. With
  * `forbidNonWhitelisted` on the global pipe, sending one is a 400.
  *
- * **No password.** Rule 48 keeps credential handling in the authentication
- * module; `User.passwordHash` is nullable precisely so an account can be
- * provisioned without one. That is what `PENDING` records.
+ * **Password is optional.** Omitting it provisions the account without one —
+ * `User.passwordHash` is nullable precisely so that is possible, and `PENDING`
+ * is what records it. Supplying one makes the account immediately usable and
+ * flags it `mustChangePassword`, because a password an administrator chose is
+ * known to two people until the user replaces it.
+ *
+ * Rule 48 still holds: the hashing, the policy check and the forced-change gate
+ * all live in the authentication module. This DTO carries the plaintext exactly
+ * as far as `UserService.create`, which hands it straight to `PasswordService`.
  *
  * `branchId` IS accepted, and does not weaken the scope rule: naming a branch
  * confines the new user rather than widening anyone, and the service still
@@ -81,4 +87,22 @@ export class CreateUserDto {
     message: 'Account Status is required',
   })
   status!: 'PENDING' | 'ACTIVE' | 'INACTIVE';
+
+  /**
+   * The account's first password, chosen by the administrator creating it.
+   *
+   * Optional, and omitting it keeps the previous behaviour exactly: no hash, and
+   * `PENDING`. Supplying one activates the account and sets `mustChangePassword`,
+   * so the borrowed credential buys access to Change Password and nothing else.
+   *
+   * Bounded for the same reason sign-in's is: unbounded input lets a caller
+   * force arbitrarily expensive argon2 work. The policy itself (length,
+   * character classes, not containing the account's own identifiers) is checked
+   * in the service by `PasswordPolicyService`, which owns those rules.
+   */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'Password is required' })
+  @MaxLength(200)
+  password?: string;
 }

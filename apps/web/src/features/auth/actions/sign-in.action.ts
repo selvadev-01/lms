@@ -101,5 +101,14 @@ export async function signInAction(
 
   // Outside the try: redirect() signals by throwing, so a catch would swallow
   // it and the navigation would silently never happen.
-  redirect(dashboardPathFor(user.roles));
+  //
+  // An account still on a password an administrator chose goes straight to
+  // Change Password, decided HERE rather than in the admin layout. A layout
+  // that redirects during a client-side navigation never updates the router's
+  // URL, so the router retries the original destination and the two bounce off
+  // each other indefinitely. Choosing the destination before the navigation
+  // starts is what avoids that entirely.
+  redirect(
+    user.mustChangePassword ? "/change-password" : dashboardPathFor(user.roles),
+  );
 }

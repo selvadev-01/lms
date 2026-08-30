@@ -14,6 +14,8 @@ import type {
 
 import { AuditAction, AuditService } from '../../audit/audit.service';
 import type { RequestMeta } from '../../auth/auth.service';
+import { PasswordService } from '../../auth/password.service';
+import { PasswordPolicyService } from '../../auth/password-policy.service';
 import { SessionService } from '../../auth/session.service';
 import { SESSION_REVOKE_REASON } from '../../auth/session-state';
 import type { AuthContext } from '../../common/auth-context';
@@ -161,6 +163,8 @@ export class UserService {
     private readonly audit: AuditService,
     private readonly branches: BranchService,
     private readonly sessions: SessionService,
+    private readonly passwords: PasswordService,
+    private readonly passwordPolicy: PasswordPolicyService,
   ) {}
 
   /** Scenarios 1, 4, 14, 20, 22, 53. */
@@ -251,17 +255,48 @@ export class UserService {
 
     if (branchId) this.assertBranchInScope(actor, branchId);
 
+    const password = 'password' in dto ? dto.password : undefined;
+
     // An account with no password cannot sign in, so calling it ACTIVE would
-    // advertise access that does not exist. PENDING is the honest state.
-    if (dto.status === 'ACTIVE') {
+    // advertise access that does not exist. PENDING is the honest state — but
+    // only while there is no password. Supplying one is precisely what makes
+    // ACTIVE truthful, so the refusal is now about the credential rather than
+    // about the status.
+    if (dto.status === 'ACTIVE' && !password) {
       await this.recordRejection(actor, meta, null, surface, 'NO_CREDENTIAL');
       throw new ConflictException(
-        'A new account cannot be created ACTIVE. Create it as PENDING; it becomes usable once a password is set.',
+        'A new account cannot be created ACTIVE without a password. Set one, or create it as PENDING.',
       );
     }
 
     await this.assertRolesAssignable(actor, dto.roleIds, meta, null);
     await this.assertIdentifiersFree(actor, dto, employeeCode, meta, surface);
+
+    /**
+     * Hashed before the transaction opens, and only after the policy passes.
+     *
+     * argon2 costs ~19 MiB and a few hundred milliseconds of deliberate CPU;
+     * holding a database transaction across it wastes a connection for no
+     * reason. `assertNotReused` is deliberately not called — history is
+     * per-user and there is no user yet.
+     */
+    let passwordHash: string | null = null;
+    if (password) {
+      this.passwordPolicy.assertMeetsPolicy(password, [
+        dto.name,
+        dto.mobile,
+        actor.orgCode,
+      ]);
+      passwordHash = await this.passwords.hash(password);
+    }
+
+    /**
+     * A password the administrator chose is known to two people. The account is
+     * usable immediately — that is the point — but reaches nothing except
+     * Change Password until it is replaced.
+     */
+    const mustChangePassword = passwordHash !== null;
+    const status = passwordHash ? 'ACTIVE' : dto.status;
 
     try {
       const created = await this.prisma.$transaction(async (tx) => {
@@ -281,9 +316,13 @@ export class UserService {
             email: dto.email ?? null,
             branchId,
             employeeCode,
-            status: dto.status,
-            // Rule 48: credential handling belongs to the authentication module.
-            passwordHash: null,
+            status,
+            // Rule 48 still holds: the hash was produced by PasswordService and
+            // the policy by PasswordPolicyService. Null when no password was
+            // supplied, which is what PENDING records.
+            passwordHash,
+            passwordChangedAt: passwordHash ? new Date() : null,
+            mustChangePassword,
           },
         });
 
@@ -320,6 +359,11 @@ export class UserService {
               employeeCode: row.employeeCode,
               status: row.status,
               roleIds: dto.roleIds,
+              // Whether a credential was set, never what it was. That an
+              // administrator chose someone else's first password is exactly
+              // the kind of thing an audit trail exists to record.
+              passwordSet: row.passwordHash !== null,
+              mustChangePassword: row.mustChangePassword,
             },
           },
           tx,

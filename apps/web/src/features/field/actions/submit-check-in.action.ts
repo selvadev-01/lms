@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/features/auth/api/session";
+import { CSRF_HEADERS } from "@/lib/api-call";
 import { env } from "@/lib/env";
 
 export interface CheckInState {
@@ -89,6 +90,7 @@ export async function submitCheckInAction(
     const response = await fetch(`${env.API_BASE_URL}/api/v1/field/check-in`, {
       method: "POST",
       headers: {
+        ...CSRF_HEADERS,
         "Content-Type": "application/json",
         cookie: cookieStore.toString(),
       },

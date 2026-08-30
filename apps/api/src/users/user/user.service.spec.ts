@@ -6,11 +6,16 @@ import {
 
 import { AuditAction, AuditService } from '../../audit/audit.service';
 import type { RequestMeta } from '../../auth/auth.service';
+import type { PasswordService } from '../../auth/password.service';
+import type { PasswordPolicyService } from '../../auth/password-policy.service';
 import type { SessionService } from '../../auth/session.service';
 import type { AuthContext } from '../../common/auth-context';
 import type { BranchService } from '../../organizations/branch.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { UserService } from './user.service';
+
+/** Recognisable sentinel — see buildPasswords. */
+const HASHED_PASSWORD = '$argon2id$stub-hash';
 
 /**
  * User and Employee management.
@@ -260,7 +265,14 @@ function buildDb(
           roleIds: [],
         };
         state.set(fixture.userId, fixture);
-        return Promise.resolve(row(fixture));
+        // The credential columns are not part of the read-shaped fixture, but
+        // the service reads them back off the created row to build its audit
+        // entry — so echo them rather than letting that read undefined.
+        return Promise.resolve({
+          ...row(fixture),
+          passwordHash: (args.data.passwordHash as string | null) ?? null,
+          mustChangePassword: Boolean(args.data.mustChangePassword),
+        });
       }),
       update: jest.fn(
         (args: {
@@ -349,6 +361,19 @@ function buildDb(
   return {
     state,
     deleted,
+    /**
+     * What `user.create` was actually asked to write.
+     *
+     * The fixture the mock stores is a summary shaped for reads and drops the
+     * credential columns, so assertions about `passwordHash` and
+     * `mustChangePassword` have to look at the call itself.
+     */
+    createdData: () =>
+      (
+        (client.user as { create: jest.Mock }).create.mock.calls as Array<
+          [{ data: Record<string, unknown> }]
+        >
+      ).map((call) => call[0].data),
     client: () =>
       new Proxy(client, {
         get: (target, prop: string) =>
@@ -357,17 +382,27 @@ function buildDb(
   };
 }
 
+type AuditEntry = {
+  action: string;
+  metadata?: Record<string, unknown>;
+  // Captured so a test can assert what a create recorded — and, just as
+  // importantly, what it did not.
+  newData?: Record<string, unknown>;
+};
+
 function buildAudit() {
-  const events: Array<{ action: string; metadata?: Record<string, unknown> }> =
-    [];
-  const record = jest.fn(
-    (input: { action: string; metadata?: Record<string, unknown> }) => {
-      events.push({ action: input.action, metadata: input.metadata });
-      return Promise.resolve();
-    },
-  );
+  const events: AuditEntry[] = [];
+  const record = jest.fn((input: AuditEntry) => {
+    events.push({
+      action: input.action,
+      metadata: input.metadata,
+      newData: input.newData,
+    });
+    return Promise.resolve();
+  });
   return {
     events,
+    entries: () => events,
     actions: () => events.map((e) => e.action),
     service: () => ({ record }) as unknown as AuditService,
   };
@@ -392,13 +427,41 @@ function buildSessions() {
   };
 }
 
+/**
+ * Credential collaborators, stubbed.
+ *
+ * The hash is a recognisable sentinel rather than a realistic argon2 string, so
+ * a test asserting it reached the row cannot pass by accident.
+ */
+function buildPasswords() {
+  const hash = jest.fn().mockResolvedValue(HASHED_PASSWORD);
+  return { hash, service: () => ({ hash }) as unknown as PasswordService };
+}
+
+function buildPasswordPolicy() {
+  const assertMeetsPolicy = jest.fn();
+  return {
+    assertMeetsPolicy,
+    service: () => ({ assertMeetsPolicy }) as unknown as PasswordPolicyService,
+  };
+}
+
 function makeService(
   db: ReturnType<typeof buildDb>,
   audit: ReturnType<typeof buildAudit>,
   branches: BranchService = buildBranches(),
   sessions: SessionService = buildSessions().service(),
+  passwords: PasswordService = buildPasswords().service(),
+  passwordPolicy: PasswordPolicyService = buildPasswordPolicy().service(),
 ): UserService {
-  return new UserService(db.client(), audit.service(), branches, sessions);
+  return new UserService(
+    db.client(),
+    audit.service(),
+    branches,
+    sessions,
+    passwords,
+    passwordPolicy,
+  );
 }
 
 describe('UserService — the surface split', () => {
@@ -554,6 +617,147 @@ describe('UserService.create', () => {
 
     expect(result.employeeCode).toBe('EMP090');
     expect(audit.actions()).toContain(AuditAction.EMPLOYEE_CREATED);
+  });
+
+  it('refuses ACTIVE without a password — a live account nobody can sign in to', async () => {
+    const db = buildDb([]);
+
+    await expect(
+      makeService(db, buildAudit()).create(
+        superAdmin(),
+        'USER',
+        {
+          name: 'No Credential',
+          mobile: '9000000091',
+          roleIds: [PLAIN_ROLE_ID],
+          status: 'ACTIVE',
+        },
+        META,
+      ),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  describe('an administrator-set first password', () => {
+    const withPassword = {
+      name: 'Bala Kumar',
+      mobile: '9000000092',
+      roleIds: [PLAIN_ROLE_ID],
+      status: 'PENDING' as const,
+      password: 'Falcon9Ridge2026',
+    };
+
+    it('activates the account and flags it for a forced change', async () => {
+      // The whole point: an account created this way is usable immediately,
+      // which PENDING never was, and confined until the borrowed password goes.
+      const db = buildDb([]);
+      const passwords = buildPasswords();
+
+      await makeService(
+        db,
+        buildAudit(),
+        buildBranches(),
+        buildSessions().service(),
+        passwords.service(),
+      ).create(superAdmin(), 'USER', withPassword, META);
+
+      const [data] = db.createdData();
+      expect(data.status).toBe('ACTIVE');
+      expect(data.passwordHash).toBe(HASHED_PASSWORD);
+      expect(data.mustChangePassword).toBe(true);
+      expect(data.passwordChangedAt).toBeInstanceOf(Date);
+    });
+
+    it('overrides a PENDING status rather than honouring it', async () => {
+      // The form sends PENDING by default. A password makes that wrong, and the
+      // server decides — otherwise the account would be created unusable while
+      // holding a perfectly good credential.
+      const db = buildDb([]);
+
+      await makeService(db, buildAudit()).create(
+        superAdmin(),
+        'USER',
+        { ...withPassword, status: 'PENDING' },
+        META,
+      );
+
+      expect(db.createdData()[0].status).toBe('ACTIVE');
+    });
+
+    it('checks the policy against the account own identifiers', async () => {
+      const db = buildDb([]);
+      const policy = buildPasswordPolicy();
+
+      await makeService(
+        db,
+        buildAudit(),
+        buildBranches(),
+        buildSessions().service(),
+        buildPasswords().service(),
+        policy.service(),
+      ).create(superAdmin(), 'USER', withPassword, META);
+
+      expect(policy.assertMeetsPolicy).toHaveBeenCalledWith(
+        'Falcon9Ridge2026',
+        ['Bala Kumar', '9000000092', 'DEMO'],
+      );
+    });
+
+    it('refuses a password the policy rejects, before writing anything', async () => {
+      const db = buildDb([]);
+      const policy = buildPasswordPolicy();
+      policy.assertMeetsPolicy.mockImplementation(() => {
+        throw new Error('Password is too short');
+      });
+
+      await expect(
+        makeService(
+          db,
+          buildAudit(),
+          buildBranches(),
+          buildSessions().service(),
+          buildPasswords().service(),
+          policy.service(),
+        ).create(superAdmin(), 'USER', withPassword, META),
+      ).rejects.toThrow('Password is too short');
+
+      expect(db.createdData()).toHaveLength(0);
+    });
+
+    it('never lets the plaintext reach the row or the audit trail', async () => {
+      const db = buildDb([]);
+      const audit = buildAudit();
+
+      await makeService(db, audit).create(
+        superAdmin(),
+        'USER',
+        withPassword,
+        META,
+      );
+
+      const written = JSON.stringify(db.createdData());
+      expect(written).not.toContain('Falcon9Ridge2026');
+      expect(JSON.stringify(audit.entries())).not.toContain('Falcon9Ridge2026');
+    });
+
+    it('records that a credential was set, without recording it', async () => {
+      const db = buildDb([]);
+      const audit = buildAudit();
+
+      await makeService(db, audit).create(
+        superAdmin(),
+        'USER',
+        withPassword,
+        META,
+      );
+
+      const created = audit
+        .entries()
+        .find((entry) => entry.action === AuditAction.USER_CREATED);
+      expect(created?.newData).toMatchObject({
+        passwordSet: true,
+        mustChangePassword: true,
+      });
+    });
   });
 
   it('assigns an operational role the actor does not hold — Rule 27 is about escalation', async () => {

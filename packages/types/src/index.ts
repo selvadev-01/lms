@@ -442,6 +442,15 @@ export interface AuthUser {
   /** Absent for SUPER_ADMIN, who is not scoped to a branch. */
   branchId?: ID;
   branchName?: string;
+  /**
+   * True while a password an administrator chose is still in force.
+   *
+   * The client uses it to send the user to Change Password and nothing else.
+   * It is a hint for the interface, not the control: the API enforces the same
+   * confinement in `JwtAuthGuard`, so a client that ignores this is refused
+   * rather than obeyed.
+   */
+  mustChangePassword?: boolean;
 }
 
 /* -------------------------------------------------------------------------- */

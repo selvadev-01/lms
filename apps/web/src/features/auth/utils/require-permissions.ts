@@ -24,6 +24,26 @@ export async function requirePermissions(
 ): Promise<AuthUser> {
   const user = await requireSession();
 
+  /**
+   * An account still using a password an administrator chose reaches Change
+   * Password and nothing else.
+   *
+   * Checked before the permission test, and it must be: the permission branch
+   * below sends an unauthorized caller to `/`, which for a confined account
+   * would only be refused again. Answering here terminates instead.
+   *
+   * Change Password itself does not call this guard, so there is nothing for
+   * this redirect to bounce off. Sign-in already routes such an account
+   * straight here; this covers the other way in — a typed URL, a bookmark, or
+   * browser history.
+   *
+   * Not the control. `JwtAuthGuard` refuses every API call from a confined
+   * account, so a client that ignored this would render empty screens.
+   */
+  if (user.mustChangePassword) {
+    redirect("/change-password");
+  }
+
   const missing = codes.filter((code) => !user.permissions.includes(code));
 
   if (missing.length > 0) {

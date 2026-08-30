@@ -1,8 +1,9 @@
 "use client";
-import Image from "next/image";
 import React, { useState } from "react";
-import { Dropdown } from "@lms/ui";
+import { AvatarText, Dropdown } from "@lms/ui";
 import { DropdownItem } from "@lms/ui";
+
+import type { ChromeUser } from "@/layout/chrome-user";
 
 /**
  * Imported from the action module directly rather than the feature barrel.
@@ -13,8 +14,21 @@ import { DropdownItem } from "@lms/ui";
  */
 import { signOutAction } from "@/features/auth/actions/sign-out.action";
 
-export default function UserDropdown() {
+export default function UserDropdown({ user }: { user: ChromeUser | null }) {
   const [isOpen, setIsOpen] = useState(false);
+
+  /**
+   * What to call the user before the session resolves, or when it is absent.
+   *
+   * The admin layout deliberately does not redirect on a null session — each
+   * page runs its own guard — so this component has to render without one
+   * rather than assume it is there.
+   */
+  const name = user?.name ?? "Account";
+
+  // Mobile, not email: `User.email` is nullable and sign-in is by mobile, so the
+  // number is the one contact detail every user is guaranteed to have.
+  const contact = user?.email ?? user?.mobile ?? "";
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
     e.stopPropagation();
@@ -30,16 +44,13 @@ export default function UserDropdown() {
         onClick={toggleDropdown}
         className="dropdown-toggle flex items-center text-gray-700 dark:text-gray-400"
       >
-        <span className="mr-3 h-11 w-11 overflow-hidden rounded-full">
-          <Image
-            width={44}
-            height={44}
-            src="/images/user/owner.jpg"
-            alt="User"
-          />
+        <span className="mr-3">
+          <AvatarText name={name} className="h-11! w-11!" />
         </span>
 
-        <span className="text-theme-sm mr-1 block font-medium">Musharof</span>
+        <span className="text-theme-sm mr-1 block max-w-[10rem] truncate font-medium">
+          {name}
+        </span>
 
         <svg
           className={`stroke-gray-500 transition-transform duration-200 dark:stroke-gray-400 ${
@@ -67,12 +78,21 @@ export default function UserDropdown() {
         className="shadow-theme-lg dark:bg-gray-dark absolute right-0 mt-[17px] flex w-[260px] flex-col rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-800"
       >
         <div>
-          <span className="text-theme-sm block font-medium text-gray-700 dark:text-gray-400">
-            Musharof Chowdhury
+          <span className="text-theme-sm block truncate font-medium text-gray-700 dark:text-gray-400">
+            {name}
           </span>
-          <span className="text-theme-xs mt-0.5 block text-gray-500 dark:text-gray-400">
-            randomuser@pimjo.com
-          </span>
+          {contact && (
+            <span className="text-theme-xs mt-0.5 block truncate text-gray-500 dark:text-gray-400">
+              {contact}
+            </span>
+          )}
+          {/* The organization, because a user can hold an account in more than
+              one and the code is what they typed to sign in. */}
+          {user?.orgCode && (
+            <span className="text-theme-xs mt-0.5 block text-gray-400 dark:text-gray-500">
+              {user.orgCode}
+            </span>
+          )}
         </div>
 
         <ul className="flex flex-col gap-1 border-b border-gray-200 pt-4 pb-3 dark:border-gray-800">
@@ -98,7 +118,9 @@ export default function UserDropdown() {
                   fill=""
                 />
               </svg>
-              Edit profile
+              {/* "View profile", not "Edit profile": the screen is read-only,
+                  and the details on it are maintained by an administrator. */}
+              View profile
             </DropdownItem>
           </li>
           <li>
@@ -123,14 +145,17 @@ export default function UserDropdown() {
                   fill=""
                 />
               </svg>
-              Account settings
+              {/* Named for where it goes. It linked to /change-password under
+                  the template's "Account settings" label, which promised a
+                  settings screen that does not exist. */}
+              Change password
             </DropdownItem>
           </li>
           <li>
             <DropdownItem
               onItemClick={closeDropdown}
               tag="a"
-              href="/profile"
+              href="/active-sessions"
               className="group text-theme-sm flex items-center gap-3 rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
             >
               <svg
@@ -148,7 +173,10 @@ export default function UserDropdown() {
                   fill=""
                 />
               </svg>
-              Support
+              {/* Replaced "Support", which pointed at /profile — there is no
+                  support screen. Active Sessions is a real account-security
+                  surface and belongs in this menu. */}
+              Active sessions
             </DropdownItem>
           </li>
         </ul>

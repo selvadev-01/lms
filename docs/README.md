@@ -5,8 +5,10 @@ Everything that specifies the Loan Management System. Source of truth for develo
 ```
 docs/
   README.md                 ← you are here (index + status)
+  START-THE-APP.md          ← run it locally: Postgres, env, migrate, seed, dev
   START-HERE-PROMPT.md      ← ⭐ paste this into a new chat to begin development
   PROMPT-DEVELOPMENT.md     ← reusable per-story prompt, for every story after the first
+  AUDIT-PROMPT.md           ← black-box UI audit prompt, for an agent with a browser
   _shared/                  cross-module contracts — read before writing any story
     Database-Schema.md        PostgreSQL schema, all tables + ER diagram
     State-Machines.md         Application / Loan / EMI / Collection / Approval states
@@ -34,7 +36,22 @@ docs/
 
 ---
 
+## Testing the built app
+
+The application is implemented end to end. To exercise it by hand:
+
+1. [START-THE-APP.md](START-THE-APP.md) — get it running locally.
+
+For an agent-driven black-box audit instead, use [AUDIT-PROMPT.md](AUDIT-PROMPT.md).
+
+---
+
 ## Module status
+
+> ⚠️ **The table below is stale.** It tracks _story documents written_, not code.
+> Modules 10–17 are marked pending here but are all implemented and covered by
+> the Playwright suite in `apps/web/e2e/`. Treat this as a spec-coverage table,
+> not a build-status one.
 
 |   # | Module                                 | Stories | Status     |
 | --: | -------------------------------------- | ------: | ---------- |

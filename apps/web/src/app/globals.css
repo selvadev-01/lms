@@ -8,11 +8,11 @@
 
 /* App-local: third-party library overrides (ApexCharts, flatpickr). */
 @layer utilities {
-  /* For Remove Date Icon */
+  /* Suppresses the browser's own calendar button on any remaining native date
+     input, so it cannot appear beside the flatpickr icon `DateField` draws.
+     `DateField` itself renders `type="text"` and is unaffected either way. */
   input[type="date"]::-webkit-inner-spin-button,
-  input[type="time"]::-webkit-inner-spin-button,
-  input[type="date"]::-webkit-calendar-picker-indicator,
-  input[type="time"]::-webkit-calendar-picker-indicator {
+  input[type="date"]::-webkit-calendar-picker-indicator {
     display: none;
     -webkit-appearance: none;
   }

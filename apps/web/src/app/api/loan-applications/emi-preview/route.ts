@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { CSRF_HEADERS } from "@/lib/api-call";
 import { env } from "@/lib/env";
 
 /**
@@ -36,6 +37,7 @@ export async function POST(request: Request): Promise<Response> {
     {
       method: "POST",
       headers: {
+        ...CSRF_HEADERS,
         cookie: cookieStore.toString(),
         "Content-Type": "application/json",
       },

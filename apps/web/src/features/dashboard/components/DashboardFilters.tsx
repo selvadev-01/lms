@@ -1,4 +1,5 @@
 import type { DashboardLayout } from "@lms/types";
+import DateField from "@/components/form/DateField";
 
 /**
  * The period and branch controls.
@@ -75,24 +76,14 @@ export function DashboardFilters({
           <span className="text-xs text-gray-500 dark:text-gray-400">
             From (custom only)
           </span>
-          <input
-            type="date"
-            name="fromDate"
-            defaultValue={fromDate}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-          />
+          <DateField name="fromDate" defaultValue={fromDate} bare />
         </label>
 
         <label className="flex flex-col gap-1">
           <span className="text-xs text-gray-500 dark:text-gray-400">
             To (custom only)
           </span>
-          <input
-            type="date"
-            name="toDate"
-            defaultValue={toDate}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-          />
+          <DateField name="toDate" defaultValue={toDate} bare />
         </label>
 
         <label className="flex flex-col gap-1">

@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -90,6 +91,15 @@ export class JwtAuthGuard implements CanActivate {
     try {
       payload = await this.jwtService.verifyAsync<AccessTokenPayload>(token, {
         secret: this.config.get<string>('auth.jwtSecret'),
+        /**
+         * Pinned, never inferred from the token.
+         *
+         * Without an allow-list the library decides how to verify by reading
+         * the `alg` header of the very token it is checking — which is attacker
+         * input. That is the classic JWT algorithm-confusion family, and an
+         * allow-list of exactly the algorithm we sign with closes it outright.
+         */
+        algorithms: ['HS256'],
       });
     } catch {
       // Expired or tampered — indistinguishable to the caller by design.
@@ -99,6 +109,8 @@ export class JwtAuthGuard implements CanActivate {
     await this.assertSessionActive(payload, request);
 
     const effective = await this.resolveAuthorization(payload, request);
+
+    await this.assertPasswordNotBorrowed(effective, payload, request);
 
     // Scope comes from the verified token, never from the request body or
     // query. That is what stops a client submitting another organization or
@@ -124,6 +136,63 @@ export class JwtAuthGuard implements CanActivate {
     };
 
     return true;
+  }
+
+  /**
+   * Confines an account still using a password someone else chose.
+   *
+   * An administrator may set a new account's first password, which means that
+   * password is known to two people until the user replaces it. This is what
+   * makes that window narrow: the account signs in normally and then reaches
+   * nothing but the screen that ends the window.
+   *
+   * Enforced here rather than only in the browser because a redirect in the web
+   * app is a convenience, not a control — the API is reachable directly, and a
+   * borrowed credential that could drive it would make the whole flag
+   * decorative.
+   *
+   * The allowlist is deliberately minimal, and every entry earns its place:
+   * change-password is the way out, `me` is what the client reads to know it
+   * must go there, and sign-out must always work — an account that could not
+   * even end its own session would be trapped rather than confined.
+   */
+  private async assertPasswordNotBorrowed(
+    effective: { mustChangePassword: boolean },
+    payload: AccessTokenPayload,
+    request: Request,
+  ): Promise<void> {
+    if (!effective.mustChangePassword) return;
+
+    // Matched on the route path rather than the handler, so a new controller
+    // cannot join the allowlist by accident.
+    //
+    // `?? ''` fails closed: a request whose path cannot be read matches nothing
+    // in the allowlist and is refused, rather than throwing on `.replace` and
+    // surfacing as a 500 that says nothing about why.
+    const path = (request.path ?? '').replace(/\/+$/, '');
+    const allowed =
+      path.endsWith('/auth/change-password') ||
+      path.endsWith('/auth/me') ||
+      path.endsWith('/auth/sign-out');
+
+    if (allowed) return;
+
+    await this.tryAudit({
+      orgId: payload.orgId,
+      action: AuditAction.AUTHZ_DENIED_PASSWORD_CHANGE_REQUIRED,
+      entityType: 'USER',
+      entityId: payload.sub,
+      actorUserId: payload.sub,
+      request,
+      metadata: { path },
+    });
+
+    // 403 rather than 401: the caller is authenticated, and telling them so is
+    // the point — a 401 would send a browser back to sign in, which would
+    // succeed and land them here again.
+    throw new ForbiddenException(
+      'Your password was set by an administrator and must be changed before you can continue.',
+    );
   }
 
   /**

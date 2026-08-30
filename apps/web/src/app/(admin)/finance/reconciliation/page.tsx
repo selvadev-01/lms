@@ -7,6 +7,7 @@ import {
   ReconciliationReportPanel,
   fetchReconciliation,
 } from "@/features/accounting";
+import DateField from "@/components/form/DateField";
 
 export const metadata: Metadata = {
   title: "Reconciliation",
@@ -57,13 +58,12 @@ export default async function ReconciliationPage({
               >
                 From <span className="text-error-500">*</span>
               </label>
-              <input
+              <DateField
                 id="rec-from"
                 name="fromDate"
-                type="date"
                 required
                 defaultValue={params.fromDate}
-                className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
+                bare
               />
             </div>
 
@@ -74,13 +74,12 @@ export default async function ReconciliationPage({
               >
                 To <span className="text-error-500">*</span>
               </label>
-              <input
+              <DateField
                 id="rec-to"
                 name="toDate"
-                type="date"
                 required
                 defaultValue={params.toDate}
-                className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
+                bare
               />
             </div>
 

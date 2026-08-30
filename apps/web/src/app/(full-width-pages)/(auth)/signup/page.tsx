@@ -1,8 +1,8 @@
-import SignUpForm from "@/components/auth/SignUpForm";
+import { SignUpForm } from "@/features/auth";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sign Up",
+  title: "Create Organization",
 };
 
 export default function SignUp() {

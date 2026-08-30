@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { SessionService } from '../auth/session.service';
 import type { RequestMeta } from '../auth/auth.service';
 import type { AuthContext } from '../common/auth-context';
 import { PrismaService } from '../prisma/prisma.service';
@@ -83,6 +84,7 @@ function orgRecord(overrides: Partial<OrgRecord> = {}): OrgRecord {
 describe('OrganizationService', () => {
   let service: OrganizationService;
   let audit: { record: jest.Mock };
+  let sessions: { revokeAllForOrg: jest.Mock };
   let organizations: OrgRecord[];
 
   beforeEach(() => {
@@ -125,8 +127,13 @@ describe('OrganizationService', () => {
     } as unknown as PrismaService;
 
     audit = { record: jest.fn().mockResolvedValue(undefined) };
+    sessions = { revokeAllForOrg: jest.fn().mockResolvedValue(0) };
 
-    service = new OrganizationService(prisma, audit as unknown as AuditService);
+    service = new OrganizationService(
+      prisma,
+      audit as unknown as AuditService,
+      sessions as unknown as SessionService,
+    );
   });
 
   describe('getOwn', () => {
@@ -271,6 +278,50 @@ describe('OrganizationService', () => {
       await expect(
         service.setStatus(superAdminContext(), { status: 'ACTIVE' }, META),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    /**
+     * Per-request authorization re-reads the *user's* status, never the
+     * organization's, so nothing else notices a deactivated tenant until a
+     * token lapses and its holder reaches the refresh endpoint. Ending the
+     * sessions here is what makes the deactivation take effect immediately.
+     */
+    it('revokes every session in the organization on deactivation', async () => {
+      await service.setStatus(
+        superAdminContext(),
+        { status: 'INACTIVE', reason: 'Licence suspended' },
+        META,
+      );
+
+      expect(sessions.revokeAllForOrg).toHaveBeenCalledWith(
+        ORG_ID,
+        'ORG_INACTIVE',
+      );
+    });
+
+    it('does not revoke sessions when reactivating', async () => {
+      organizations[0].status = 'INACTIVE';
+
+      await service.setStatus(superAdminContext(), { status: 'ACTIVE' }, META);
+
+      expect(sessions.revokeAllForOrg).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The revocation runs after the transaction commits, so its failure must
+     * not roll the deactivation back — the organization is off either way, and
+     * a surviving session row is refused by the refresh path regardless.
+     */
+    it('still deactivates when session revocation fails', async () => {
+      sessions.revokeAllForOrg.mockRejectedValue(new Error('store down'));
+
+      const result = await service.setStatus(
+        superAdminContext(),
+        { status: 'INACTIVE' },
+        META,
+      );
+
+      expect(result.status).toBe('INACTIVE');
     });
 
     it('audits deactivation and activation under distinct actions', async () => {

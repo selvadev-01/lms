@@ -32,12 +32,22 @@ export default async function NewEmployeePage() {
       <PageBreadcrumb pageTitle="Add Employee" />
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        <UserForm
-          surface="EMPLOYEE"
-          branches={branches.status === "ok" ? branches.branches : []}
-          roles={roles.status === "ok" ? roles.roles : []}
-          canEdit
-        />
+        {/* See `users/new`: an empty selector would misreport a denied
+            permission or an outage as "nothing to choose". */}
+        {branches.status === "ok" && roles.status === "ok" ? (
+          <UserForm
+            surface="EMPLOYEE"
+            branches={branches.branches}
+            roles={roles.roles}
+            canEdit
+          />
+        ) : (
+          <p className="rounded-2xl border border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+            We could not load the branches and roles an employee must be
+            assigned to, so an account cannot be created right now. Please try
+            again.
+          </p>
+        )}
       </div>
     </div>
   );

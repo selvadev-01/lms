@@ -30,6 +30,16 @@ const ORG_CODE = "DEMO";
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:3001";
 
 /**
+ * The API's CSRF guard refuses a mutating request without these — with 403,
+ * before the handler runs, which a test asserting some other outcome would read
+ * as the endpoint's own answer.
+ */
+const CSRF_HEADERS = {
+  Origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+  "X-LMS-Request": "1",
+};
+
+/**
  * Signs in and waits for the redirect to land.
  *
  * A Branch Admin lands on /branch; the assertion also tolerates the other
@@ -126,9 +136,11 @@ test.describe("Active Sessions", () => {
     if (!signedIn) return;
 
     await request.post(`${API_BASE}/api/v1/auth/sessions/revoke-all`, {
+      headers: CSRF_HEADERS,
       failOnStatusCode: false,
     });
     await request.post(`${API_BASE}/api/v1/auth/sign-out`, {
+      headers: CSRF_HEADERS,
       failOnStatusCode: false,
     });
   });
@@ -320,7 +332,7 @@ test.describe("Active Sessions", () => {
     // detail that would confirm whether it exists.
     const response = await request.delete(
       `${API_BASE}/api/v1/auth/sessions/00000000-0000-4000-8000-000000000000`,
-      { failOnStatusCode: false },
+      { headers: CSRF_HEADERS, failOnStatusCode: false },
     );
 
     expect(response.ok()).toBe(true);
