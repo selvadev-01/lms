@@ -5,8 +5,14 @@ Everything that specifies the Loan Management System. Source of truth for develo
 ```
 docs/
   README.md                 ← you are here (index + status)
+  START-THE-APP.md          ← run it locally: Postgres, env, migrate, seed, dev
   START-HERE-PROMPT.md      ← ⭐ paste this into a new chat to begin development
   PROMPT-DEVELOPMENT.md     ← reusable per-story prompt, for every story after the first
+  AUDIT-PROMPT.md           ← black-box UI audit prompt, for an agent with a browser
+  TESTING-GUIDE-TA.md       ← manual testing walkthrough (Thanglish) — DEMO seed org
+  TESTING-CHECKLIST-TA.md   ← printable tick-box checklist + bug log — DEMO seed org
+  TESTING-GUIDE-NEWORG-TA.md      ← same, but starting from /signup with a fresh org
+  TESTING-CHECKLIST-NEWORG-TA.md  ← its checklist
   _shared/                  cross-module contracts — read before writing any story
     Database-Schema.md        PostgreSQL schema, all tables + ER diagram
     State-Machines.md         Application / Loan / EMI / Collection / Approval states
@@ -34,7 +40,39 @@ docs/
 
 ---
 
+## Testing the built app
+
+The application is implemented end to end. To exercise it by hand:
+
+1. [START-THE-APP.md](START-THE-APP.md) — get it running locally.
+2. Pick a starting point — the two tracks are independent, do not mix them:
+
+   | You want to…                                                           | Use                                                                                                                                                                       |
+   | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | Exercise the flows quickly against ready-made data                     | [TESTING-GUIDE-TA.md](TESTING-GUIDE-TA.md) + [checklist](TESTING-CHECKLIST-TA.md) — signs in as the `DEMO` seed org (8 customers, 4 products, 3 branches)                 |
+   | Test signup, onboarding, empty states and the draft→activate lifecycle | [TESTING-GUIDE-NEWORG-TA.md](TESTING-GUIDE-NEWORG-TA.md) + [checklist](TESTING-CHECKLIST-NEWORG-TA.md) — creates a fresh org at `/signup` and builds everything from zero |
+
+   Both cover the same 13 operational flows and both call out the two things
+   that look like defects but are not (the 60 req/min throttle, and the three
+   permissions deliberately withheld from Super Admin). The fresh-org track
+   additionally needs `ALLOW_PUBLIC_SIGNUP=true` in `apps/api/.env`, and takes
+   longer because you create the branches, roles, users, products, schemes and
+   customers yourself before any loan can exist.
+
+   A few checks only work on one track: KYC revision loops, locked accounts and
+   cross-_organization_ isolation need the seed fixtures, while signup itself,
+   empty states and draft→activate can only be seen on a fresh org.
+
+For an agent-driven black-box audit instead, use [AUDIT-PROMPT.md](AUDIT-PROMPT.md).
+
+---
+
 ## Module status
+
+> ⚠️ **The table below is stale.** It tracks _story documents written_, not code.
+> Modules 10–17 are marked pending here but are all implemented and covered by
+> the Playwright suite in `apps/web/e2e/`. Treat this as a spec-coverage table,
+> not a build-status one.
 
 |   # | Module                                 | Stories | Status     |
 | --: | -------------------------------------- | ------: | ---------- |

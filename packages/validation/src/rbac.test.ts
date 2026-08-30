@@ -374,3 +374,83 @@ describe("setRolePermissionsSchema", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("an administrator-set first password", () => {
+  const withPassword = {
+    ...validUser,
+    password: "Falcon9Ridge2026",
+    confirmPassword: "Falcon9Ridge2026",
+  };
+
+  /** The field paths a failed parse blamed. */
+  function paths(schema: typeof createUserSchema, input: unknown): string[] {
+    const result = schema.safeParse(input);
+    return result.success
+      ? []
+      : result.error.issues.map((issue) => issue.path.join("."));
+  }
+
+  it("accepts a matching pair", () => {
+    expect(createUserSchema.safeParse(withPassword).success).toBe(true);
+  });
+
+  it("still accepts a create with no password at all", () => {
+    // Omitting it is the older behaviour and remains valid: the account is
+    // provisioned without a credential and stays PENDING.
+    expect(createUserSchema.safeParse(validUser).success).toBe(true);
+  });
+
+  it("reports a mismatch against the field the user would correct", () => {
+    const blamed = paths(createUserSchema, {
+      ...withPassword,
+      confirmPassword: "Falcon9Ridge2027",
+    });
+
+    expect(blamed).toContain("confirmPassword");
+    expect(blamed).not.toContain("password");
+  });
+
+  it("requires a confirmation once a password is typed", () => {
+    expect(
+      paths(createUserSchema, { ...withPassword, confirmPassword: "" }),
+    ).toContain("confirmPassword");
+  });
+
+  it("rejects a password shorter than the policy minimum", () => {
+    expect(
+      paths(createUserSchema, {
+        ...withPassword,
+        password: "short",
+        confirmPassword: "short",
+      }),
+    ).toContain("password");
+  });
+
+  /**
+   * The rule that would break silently.
+   *
+   * The employee schema is built from the same field set, and a `.superRefine`
+   * left on the administrator schema would not survive being extended — the
+   * employee form would accept a mismatched pair while looking correct.
+   */
+  it("enforces the same rules on the employee form", () => {
+    const validEmployee = {
+      ...withPassword,
+      employeeCode: "EMP021",
+      branchId: "22222222-2222-4222-8222-222222222222",
+    };
+
+    expect(createEmployeeSchema.safeParse(validEmployee).success).toBe(true);
+
+    const result = createEmployeeSchema.safeParse({
+      ...validEmployee,
+      confirmPassword: "Falcon9Ridge2027",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain(
+        "confirmPassword",
+      );
+    }
+  });
+});

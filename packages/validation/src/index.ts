@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// Imported at the top rather than beside the re-export below: the compiled CJS
+// turns a lower import into a require that runs after signUpSchema is built,
+// which fails at load with a TDZ error rather than at compile time.
+import { passwordPolicySchema } from "./password-policy";
+
 import {
   emailSchema,
   mobileField,
@@ -67,6 +72,39 @@ export const signInSchema = z.object({
 });
 
 /**
+ * Public organization signup — creating a tenant and its first Super Admin.
+ *
+ * Every field reuses an existing primitive rather than restating a rule, so the
+ * browser and the API cannot come to disagree about what a valid organization
+ * code or mobile number is.
+ *
+ * The password uses the full `passwordPolicySchema`, unlike sign-in above: this
+ * is a password being *created*, which is exactly where the policy belongs.
+ *
+ * `confirmPassword` exists only here. The API has no such field — it receives
+ * one password and either accepts it or does not, and checking that two strings
+ * the same client sent match each other proves nothing server-side. It is a
+ * typo-catcher for the person typing, so it is enforced where the typing
+ * happens.
+ */
+export const signUpSchema = z
+  .object({
+    orgName: z.string().trim().min(1, "Organization Name is required").max(200),
+    orgCode: orgCodeSchema,
+    adminName: z.string().trim().min(1, "Your Name is required").max(200),
+    adminMobile: mobileField,
+    password: passwordPolicySchema,
+    confirmPassword: z.string().min(1, "Confirm your password"),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Passwords do not match",
+    // Reported against the field the user would correct, not the first one.
+    path: ["confirmPassword"],
+  });
+
+export type SignUpInput = z.infer<typeof signUpSchema>;
+
+/**
  * Password policy for creating or changing a password.
  *
  * Defined in ./password-policy so the rules, their messages and the UI-facing
@@ -93,8 +131,6 @@ export {
   type PasswordPolicyOptions,
   type PasswordRule,
 } from "./password-policy";
-
-import { passwordPolicySchema } from "./password-policy";
 
 // --- Password recovery -------------------------------------------------------
 

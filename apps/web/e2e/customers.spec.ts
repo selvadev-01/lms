@@ -5,6 +5,7 @@ import {
   STORAGE_STATE,
   apiAs,
   cookieHeader,
+  CSRF_HEADERS,
 } from "./support/session";
 
 /**
@@ -501,7 +502,7 @@ test.describe("Documents", () => {
     const response = await request.post(
       `${API_BASE}/api/v1/customers/${customerId}/documents`,
       {
-        headers: { cookie },
+        headers: { cookie, ...CSRF_HEADERS },
         multipart: {
           documentType: "ID",
           file: {

@@ -1,4 +1,5 @@
-import { maskMobile, sanitizeMetadata } from './audit.service';
+import type { PrismaService } from '../prisma/prisma.service';
+import { AuditService, maskMobile, sanitizeMetadata } from './audit.service';
 
 describe('AuditService helpers', () => {
   describe('sanitizeMetadata', () => {
@@ -24,6 +25,34 @@ describe('AuditService helpers', () => {
       expect(
         sanitizeMetadata({ reason: 'INVALID_CREDENTIALS', attemptNumber: 3 }),
       ).toEqual({ reason: 'INVALID_CREDENTIALS', attemptNumber: 3 });
+    });
+
+    /**
+     * The filter matches key *names*, so it also drops harmless fields that
+     * merely contain "token" or "hash". Doing that silently is the hazard:
+     * a contributor unaware of the convention writes `tokenId`, it never
+     * appears, and nothing anywhere says the record is incomplete.
+     */
+    it('names the keys it dropped', () => {
+      const result = sanitizeMetadata({
+        reason: 'X',
+        resetToken: 'secret-value',
+      });
+
+      expect(result).toEqual({ reason: 'X', redactedKeys: ['resetToken'] });
+    });
+
+    it('records only the key name, never the value it dropped', () => {
+      const result = sanitizeMetadata({ password: 'Password@123' });
+
+      expect(JSON.stringify(result)).not.toContain('Password@123');
+      expect(result).toEqual({ redactedKeys: ['password'] });
+    });
+
+    it('adds nothing when there was nothing to drop', () => {
+      expect(sanitizeMetadata({ reason: 'X' })).not.toHaveProperty(
+        'redactedKeys',
+      );
     });
 
     /**
@@ -65,5 +94,78 @@ describe('AuditService helpers', () => {
     it('fully masks values too short to partially reveal', () => {
       expect(maskMobile('123')).toBe('XXX');
     });
+  });
+});
+
+/**
+ * Events that belong to no tenant.
+ *
+ * `audit_logs` cannot hold these — `org_id` is half its primary key and a
+ * foreign key — so a sign-in against an unknown organization code used to reach
+ * the application log only. That left credential stuffing against invented org
+ * codes with no queryable trail, which is the one attack that probes the tenant
+ * boundary itself.
+ */
+describe('AuditService untenanted events', () => {
+  let create: jest.Mock;
+  let service: AuditService;
+
+  beforeEach(() => {
+    create = jest.fn().mockResolvedValue({});
+    service = new AuditService({
+      untenantedAuditLog: { create },
+    } as unknown as PrismaService);
+  });
+
+  it('persists a sign-in against an unknown organization', () => {
+    service.recordUnresolvableTenant({
+      orgCode: 'NOPE',
+      maskedMobile: '98XXXXXX10',
+      ipAddress: '203.0.113.9',
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'AUTH_LOGIN_UNKNOWN_ORG',
+        orgCode: 'NOPE',
+        maskedMobile: '98XXXXXX10',
+        ipAddress: '203.0.113.9',
+      }),
+    });
+  });
+
+  it('persists a rejected signup with its reason', () => {
+    service.recordSignupRejected({ orgCode: 'TAKEN', reason: 'DUPLICATE' });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'ORG_SIGNUP_REJECTED',
+        metadata: { reason: 'DUPLICATE' },
+      }),
+    });
+  });
+
+  /** The value is attacker-supplied; the column is 100 wide. */
+  it('truncates an over-long organization code rather than losing the record', () => {
+    service.recordSignupRejected({ orgCode: 'X'.repeat(500), reason: 'BAD' });
+
+    const data = create.mock.calls[0][0].data as { orgCode: string };
+    expect(data.orgCode).toHaveLength(100);
+  });
+
+  /**
+   * A write failure must not surface to the caller. If it did, an attacker
+   * could tell a real organization code from an invented one by which request
+   * errors — the enumeration oracle the constant response text exists to deny.
+   */
+  it('swallows a write failure rather than failing the request', () => {
+    create.mockRejectedValue(new Error('table missing'));
+
+    expect(() =>
+      service.recordUnresolvableTenant({
+        orgCode: 'NOPE',
+        maskedMobile: '98XXXXXX10',
+      }),
+    ).not.toThrow();
   });
 });

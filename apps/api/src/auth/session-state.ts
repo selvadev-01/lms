@@ -44,6 +44,16 @@ export const SESSION_REVOKE_REASON = {
   PASSWORD_RESET: 'PASSWORD_RESET',
   ACCOUNT_INELIGIBLE: 'ACCOUNT_INELIGIBLE',
   ORG_INACTIVE: 'ORG_INACTIVE',
+  /**
+   * A refresh token was presented after it had already been rotated away.
+   *
+   * Rotation alone only refuses the replay; it says nothing about why a token
+   * that was already spent came back. Either the legitimate holder raced
+   * themselves, or someone else has a copy — and the two are indistinguishable
+   * from here, so this is treated as theft and every session the user holds is
+   * ended. See `AuthService.refresh`.
+   */
+  REFRESH_TOKEN_REUSED: 'REFRESH_TOKEN_REUSED',
 } as const;
 
 export type SessionRevokeReason =

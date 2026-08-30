@@ -91,8 +91,40 @@ describe("refreshSession", () => {
 
   /** Revoked, idled out, or past its absolute lifetime — all answer 401. */
   it("returns null when the API refuses to renew", async () => {
-    fetchMock.mockResolvedValue({ ok: false, headers: headersWith([]) });
+    // The status matters: only 401 and 403 end a session. Anything else is a
+    // transient fault, so a mock without one would not exercise this path.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: headersWith([]),
+    });
     expect(await refreshSession("lms_rt=revoked")).toBeNull();
+  });
+
+  /**
+   * A rate limit is not a statement about the session.
+   *
+   * Returning null here signed a working user out mid-navigation: `proxy.ts`
+   * read it as a refusal and redirected to sign-in while a valid refresh token
+   * sat in the cookie jar. The dashboard alone spends nine requests per view,
+   * so the budget is reachable by ordinary clicking.
+   */
+  it("asks the caller to retry when the API is rate limited", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: headersWith([]),
+    });
+    expect(await refreshSession("lms_rt=abc")).toBe("retry");
+  });
+
+  it("asks the caller to retry when the API errors", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: headersWith([]),
+    });
+    expect(await refreshSession("lms_rt=abc")).toBe("retry");
   });
 
   /**
@@ -104,9 +136,18 @@ describe("refreshSession", () => {
     expect(await refreshSession("lms_rt=abc")).toBeNull();
   });
 
-  it("fails closed when the API is unreachable", async () => {
+  /**
+   * An unreachable API is not a revoked session either.
+   *
+   * This asserted null — "fail closed" — but ending the session was never what
+   * made it closed: the access token is still absent afterwards, so every read
+   * is refused regardless. All the null bought was signing the user out over a
+   * restart of the API, and making them retype a password to recover from it.
+   * `"retry"` keeps the cookies and lets the next navigation succeed.
+   */
+  it("asks the caller to retry when the API is unreachable", async () => {
     fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
-    expect(await refreshSession("lms_rt=abc")).toBeNull();
+    expect(await refreshSession("lms_rt=abc")).toBe("retry");
   });
 
   it("does not call the API without a cookie to present", async () => {

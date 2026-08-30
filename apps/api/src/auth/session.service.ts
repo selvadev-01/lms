@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
+import type { UserSession } from '../generated/prisma/client';
 import type { SessionState, SessionSummary } from '@lms/types';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -141,6 +142,46 @@ export class SessionService {
     return session;
   }
 
+  /**
+   * Looks a refresh token up and says *why* it is unusable.
+   *
+   * `findActiveByRefreshToken` collapses "no such token" and "this token was
+   * already spent" into the same `null`, which throws away the one signal that
+   * distinguishes a replay from a stranger guessing. This keeps them apart.
+   *
+   * A token rotated away is the interesting case: rotation guarantees the
+   * legitimate holder was issued a replacement, so the only ways the old one
+   * comes back are a client racing itself or a copy in someone else's hands.
+   * The caller cannot tell which, and per OWASP must assume the latter.
+   */
+  async classifyRefreshToken(
+    rawToken: string,
+  ): Promise<
+    | { kind: 'active'; session: UserSession }
+    | { kind: 'reused'; session: UserSession }
+    | { kind: 'unknown' }
+  > {
+    const session = await this.prisma.userSession.findUnique({
+      where: { refreshTokenHash: SessionService.hashToken(rawToken) },
+    });
+
+    if (!session) return { kind: 'unknown' };
+
+    if (session.revokedAt) {
+      // Only a *rotated* token is evidence of replay. A session ended by
+      // logout, an administrator, or a password change is simply over, and
+      // presenting its token again is expected rather than suspicious.
+      return session.revokedReason === SESSION_REVOKE_REASON.ROTATED
+        ? { kind: 'reused', session }
+        : { kind: 'unknown' };
+    }
+
+    // An expired token is not a replay: it was never spent, it just aged out.
+    if (session.expiresAt.getTime() <= Date.now()) return { kind: 'unknown' };
+
+    return { kind: 'active', session };
+  }
+
   async revoke(
     orgId: string,
     sessionId: string,
@@ -152,6 +193,76 @@ export class SessionService {
       where: { orgId, sessionId, revokedAt: null },
       data: { revokedAt: new Date(), revokedReason: reason },
     });
+  }
+
+  /**
+   * Ends every live session in an organization.
+   *
+   * Used when the tenant itself is deactivated. Per-request authorization
+   * re-reads the *user's* status but not the organization's, so without this a
+   * deactivated tenant's users keep working until their access tokens lapse —
+   * the refresh path is the only place that notices, and only when they reach
+   * it.
+   */
+  async revokeAllForOrg(orgId: string, reason: string): Promise<number> {
+    const result = await this.prisma.userSession.updateMany({
+      where: { orgId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+    return result.count;
+  }
+
+  /**
+   * Deletes dead session rows older than the retention window.
+   *
+   * # Why this is needed at all
+   *
+   * Rotation writes a new row on every refresh and revokes the old one, so an
+   * ordinary working day leaves dozens of dead rows per user and nothing ever
+   * removed them. The table only grows, and it is on the hot path of every
+   * authenticated request.
+   *
+   * # What it will not delete
+   *
+   * Only rows that are already over — revoked, or past their absolute expiry —
+   * and only those older than the window. A live session is never touched, so
+   * this cannot sign anyone out.
+   *
+   * The rows still carry investigative value while they are recent: a session's
+   * IP, user agent and revocation reason are how a compromise gets reconstructed.
+   * The window is what balances that against unbounded growth, and the *audit
+   * log* — which is never pruned — retains the record of each sign-in,
+   * revocation and refusal independently of this table.
+   *
+   * @param limit caps one call's deletions so a first run against a long-grown
+   *   table cannot hold a lock over millions of rows. Callers repeat until the
+   *   returned count is below the limit.
+   */
+  async pruneDeadSessions(limit = 1000): Promise<number> {
+    const days = this.config.get<number>('auth.sessionRetentionDays') ?? 90;
+    if (days <= 0) return 0;
+
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Selected first, then deleted by key: `deleteMany` has no `take`, so
+    // without this the first call would attempt the entire backlog at once.
+    const doomed = await this.prisma.userSession.findMany({
+      where: {
+        OR: [{ revokedAt: { lt: cutoff } }, { expiresAt: { lt: cutoff } }],
+      },
+      select: { orgId: true, sessionId: true },
+      take: limit,
+    });
+
+    if (doomed.length === 0) return 0;
+
+    const result = await this.prisma.userSession.deleteMany({
+      where: {
+        OR: doomed.map(({ orgId, sessionId }) => ({ orgId, sessionId })),
+      },
+    });
+
+    return result.count;
   }
 
   /** Used when a credential change must invalidate every existing session. */

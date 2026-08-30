@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@lms/constants";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { requirePermissions } from "@/features/auth/utils/require-permissions";
 import { DashboardKpis, fetchDashboard } from "@/features/reports";
+import DateField from "@/components/form/DateField";
 
 export const metadata: Metadata = {
   title: "Reporting Dashboard",
@@ -49,13 +50,13 @@ export default async function ReportingDashboardPage({
                 >
                   From
                 </label>
-                <input
+                <DateField
                   id="dashboard-from"
                   name="fromDate"
-                  type="date"
+                  
                   defaultValue={params.fromDate}
-                  className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
-                />
+            bare
+          />
               </div>
 
               <div>
@@ -65,13 +66,13 @@ export default async function ReportingDashboardPage({
                 >
                   To
                 </label>
-                <input
+                <DateField
                   id="dashboard-to"
                   name="toDate"
-                  type="date"
+                  
                   defaultValue={params.toDate}
-                  className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
-                />
+            bare
+          />
               </div>
 
               <button

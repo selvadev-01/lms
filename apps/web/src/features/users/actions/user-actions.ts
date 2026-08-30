@@ -24,6 +24,16 @@ import { call, endSession, type ActionState } from "@/lib/api-call";
 export interface UserFormState extends ActionState {
   /** Populated only when a delete was refused — see `deleteUserAction`. */
   blockedBy?: UserDeleteBlocker[];
+  /**
+   * The credential to hand to the new user, returned once and never stored.
+   *
+   * Present only when the administrator set a password. It lives in this action
+   * result for exactly one render — there is no route to fetch it back, and a
+   * refresh loses it — because the server keeps only the argon2 hash. That is
+   * the intended shape: the password exists in the open for as long as it takes
+   * to pass it on, and no longer.
+   */
+  credential?: { mobile: string; password: string };
 }
 
 const SERVICE = "Admin Management";
@@ -42,22 +52,34 @@ export async function createUserAction(
     branchId: formData.get("branchId"),
     roleIds: formData.getAll("roleIds"),
     status: formData.get("status"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
   });
 
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
   }
 
-  const outcome = await call(
-    "/users",
-    { method: "POST", body: parsed.data },
-    SERVICE,
-  );
+  // `confirmPassword` is dropped: it is a typo-catcher for the person typing,
+  // and the API has no such field.
+  const { confirmPassword: _confirmPassword, ...body } = parsed.data;
+
+  const outcome = await call("/users", { method: "POST", body }, SERVICE);
 
   if (outcome.kind === "session-ended") await endSession();
   if (outcome.kind === "failed") return outcome.state;
 
   revalidatePath("/users");
+
+  // A password the administrator set has to be shown before leaving the page,
+  // so the redirect is skipped and the list is reached from the panel instead.
+  // Without a password there is nothing to hand over and nothing to pause for.
+  if (body.password) {
+    return {
+      credential: { mobile: body.mobile, password: body.password },
+    };
+  }
+
   redirect("/users");
 }
 

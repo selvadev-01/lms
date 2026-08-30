@@ -8,6 +8,7 @@ import {
   fetchAccounts,
   fetchGeneralLedger,
 } from "@/features/accounting";
+import DateField from "@/components/form/DateField";
 
 export const metadata: Metadata = {
   title: "General Ledger",
@@ -87,12 +88,11 @@ export default async function GeneralLedgerPage({
               >
                 From
               </label>
-              <input
+              <DateField
                 id="ledger-from"
                 name="fromDate"
-                type="date"
                 defaultValue={params.fromDate}
-                className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
+                bare
               />
             </div>
 
@@ -103,12 +103,11 @@ export default async function GeneralLedgerPage({
               >
                 To
               </label>
-              <input
+              <DateField
                 id="ledger-to"
                 name="toDate"
-                type="date"
                 defaultValue={params.toDate}
-                className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
+                bare
               />
             </div>
 

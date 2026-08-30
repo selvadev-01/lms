@@ -37,6 +37,16 @@ const ORG_CODE = "DEMO";
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:3001";
 
 /**
+ * The API's CSRF guard refuses a mutating request without these — with 403,
+ * before the handler runs, which a test asserting some other outcome would read
+ * as the endpoint's own answer.
+ */
+const CSRF_HEADERS = {
+  Origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+  "X-LMS-Request": "1",
+};
+
+/**
  * Signs in and waits for the post-sign-in redirect to land.
  *
  * Sign-in is rate limited to 20/minute per IP and this spec signs in on nearly
@@ -106,7 +116,9 @@ async function removeScratchBranch(request: APIRequestContext): Promise<void> {
   const scratch = body.branches.find((b) => b.code === SCRATCH_CODE);
 
   if (scratch) {
-    await request.delete(`${API_BASE}/api/v1/branches/${scratch.branchId}`);
+    await request.delete(`${API_BASE}/api/v1/branches/${scratch.branchId}`, {
+      headers: CSRF_HEADERS,
+    });
   }
 }
 

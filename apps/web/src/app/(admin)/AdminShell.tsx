@@ -6,6 +6,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
+import type { ChromeUser } from "@/layout/chrome-user";
 
 /**
  * The admin shell's client half — everything that needs sidebar state.
@@ -17,9 +18,11 @@ import Backdrop from "@/layout/Backdrop";
 export default function AdminShell({
   children,
   permissions,
+  user,
 }: {
   children: React.ReactNode;
   permissions: string[];
+  user: ChromeUser | null;
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
@@ -40,7 +43,7 @@ export default function AdminShell({
         className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}
       >
         {/* Header */}
-        <AppHeader />
+        <AppHeader user={user} permissions={permissions} />
         {/* Page Content */}
         <div className="mx-auto max-w-(--breakpoint-2xl) p-4 md:p-6">
           {children}

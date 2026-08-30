@@ -1,3 +1,5 @@
+
+import DateField from "@/components/form/DateField";
 /**
  * Audit filters (Scenario 38).
  *
@@ -52,21 +54,21 @@ export default function AuditFilterBar({
 
       <label className="text-xs text-gray-600 dark:text-gray-300">
         <span className="mb-1 block">From</span>
-        <input
-          type="date"
+        <DateField
           name="from"
           defaultValue={filters.from ?? ""}
-          className="h-9 rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
+          bare
+          className="h-9! px-3!"
         />
       </label>
 
       <label className="text-xs text-gray-600 dark:text-gray-300">
         <span className="mb-1 block">To</span>
-        <input
-          type="date"
+        <DateField
           name="to"
           defaultValue={filters.to ?? ""}
-          className="h-9 rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
+          bare
+          className="h-9! px-3!"
         />
       </label>
 

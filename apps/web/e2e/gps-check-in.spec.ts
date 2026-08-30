@@ -32,6 +32,16 @@ const ORG_CODE = "DEMO";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:3001";
 
+/**
+ * The API's CSRF guard refuses a mutating request without these — with 403,
+ * before the handler runs, which a test asserting some other outcome would read
+ * as the endpoint's own answer.
+ */
+const CSRF_HEADERS = {
+  Origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+  "X-LMS-Request": "1",
+};
+
 /** Chennai — the seeded Branch A city, so the fixture reads plausibly. */
 const CHENNAI = { latitude: 13.0827, longitude: 80.2707 };
 
@@ -250,6 +260,7 @@ test.describe("GPS Check-in", () => {
     const response = await page.request.post(
       `${API_BASE}/api/v1/field/check-in`,
       {
+        headers: CSRF_HEADERS,
         data: {
           clientAttemptId: "3f8b1c2e-4d5a-4b6c-8d7e-9f0a1b2c3e01",
           latitude: CHENNAI.latitude,

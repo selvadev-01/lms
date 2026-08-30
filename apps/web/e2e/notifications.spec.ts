@@ -61,7 +61,11 @@ async function waitForNotification(
   api: Awaited<ReturnType<typeof apiAs>>,
   predicate: (row: { title: string; eventType: string }) => boolean,
   timeoutMs = 15_000,
-): Promise<{ notificationId: string; title: string; readStatus: boolean } | null> {
+): Promise<{
+  notificationId: string;
+  title: string;
+  readStatus: boolean;
+} | null> {
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
@@ -108,7 +112,9 @@ test.describe("Module 16 — Notifications", () => {
     // exactly one recipient, and there is no request either user could make
     // that would return the other's.
     const mineIds = new Set(mineBody.items.map((n) => n.notificationId));
-    const overlap = theirsBody.items.filter((n) => mineIds.has(n.notificationId));
+    const overlap = theirsBody.items.filter((n) =>
+      mineIds.has(n.notificationId),
+    );
 
     expect(overlap).toEqual([]);
   });
@@ -116,7 +122,9 @@ test.describe("Module 16 — Notifications", () => {
   test("Scenario 5: the list filters by read state", async ({ request }) => {
     const api = await apiAs(request, SUPER_ADMIN);
 
-    const unread = await api.get("/notifications?readStatus=UNREAD&pageSize=50");
+    const unread = await api.get(
+      "/notifications?readStatus=UNREAD&pageSize=50",
+    );
     expect(unread.status()).toBe(200);
 
     const body = (await unread.json()) as {

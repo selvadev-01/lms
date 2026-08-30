@@ -52,8 +52,23 @@ const PUBLIC_PATHS = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  /**
+   * Continue, with the path forwarded to server components.
+   *
+   * Set on the REQUEST headers rather than the response: a response header
+   * reaches the browser, and what needs this is the render on the server. A
+   * layout cannot otherwise know which route is beneath it, and the admin
+   * layout needs that to send an account with a borrowed password to Change
+   * Password without bouncing it off that very page.
+   */
+  const proceed = () => {
+    const headers = new Headers(request.headers);
+    headers.set("x-pathname", pathname);
+    return NextResponse.next({ request: { headers } });
+  };
+
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
-    return NextResponse.next();
+    return proceed();
   }
 
   const signIn = () => {
@@ -81,9 +96,18 @@ export async function proxy(request: NextRequest) {
    */
   if (!hasAccess && hasRefresh) {
     const fresh = await refreshSession(request.cookies.toString());
-    if (!fresh) return signIn();
+    if (fresh === null) return signIn();
 
-    const response = NextResponse.next();
+    /**
+     * The API could not answer — throttled or down. Continuing without new
+     * cookies is correct: the session was never refused, so ending it would
+     * sign out a valid user over a rate limit. The request proceeds with no
+     * access token, so the read layer still fails closed and the page renders
+     * an error rather than data.
+     */
+    if (fresh === "retry") return proceed();
+
+    const response = proceed();
     for (const cookie of fresh) {
       response.cookies.set(cookie.name, cookie.value, {
         httpOnly: true,
@@ -95,7 +119,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  return NextResponse.next();
+  return proceed();
 }
 
 export const config = {

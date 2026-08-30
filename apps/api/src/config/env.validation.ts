@@ -217,6 +217,8 @@ export function validateEnv(config: Record<string, unknown>) {
     'NOTIFICATIONS_WORKER_BATCH_SIZE',
     'NOTIFICATIONS_WORKER_POLL_SECONDS',
     'NOTIFICATIONS_JOB_RETENTION_DAYS',
+    'SIGNUP_RATE_LIMIT',
+    'SIGNUP_TRANSACTION_TIMEOUT_MS',
   ]) {
     const raw = config[key] as string | number | undefined;
     if (raw === undefined || raw === '') continue;
@@ -229,6 +231,23 @@ export function validateEnv(config: Record<string, unknown>) {
     } else if (parsed <= 0) {
       errors.push(`${key} must be greater than 0 (received ${parsed})`);
     }
+  }
+
+  /**
+   * Public signup is read as an exact string rather than for truthiness, so a
+   * typo must not silently enable it. `ALLOW_PUBLIC_SIGNUP=yes` reads as off
+   * under that rule, which would be a surprising way to discover the endpoint
+   * is closed — so reject anything that is neither "true" nor "false".
+   */
+  const allowSignup = config.ALLOW_PUBLIC_SIGNUP as string | undefined;
+  if (
+    allowSignup !== undefined &&
+    allowSignup !== '' &&
+    !['true', 'false'].includes(String(allowSignup).toLowerCase())
+  ) {
+    errors.push(
+      `ALLOW_PUBLIC_SIGNUP must be "true" or "false" (received "${String(allowSignup)}")`,
+    );
   }
 
   if (errors.length > 0) {

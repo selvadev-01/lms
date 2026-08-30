@@ -79,19 +79,31 @@ export default async function NewLoanApplicationPage() {
       <PageBreadcrumb pageTitle="New Loan Application" />
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        <ApplicationWizard
-          customers={
-            customerResult.status === "ok" ? customerResult.customers : []
-          }
-          schemes={schemes}
-          purposeOptions={purposeOptions}
-          schemeTerms={schemeTerms}
-          schemeTypes={schemeTypes}
-          canOverrideRate={hasPermissions(
-            user,
-            PERMISSIONS.LOANS_APPLICATIONS_OVERRIDE_RATE,
-          )}
-        />
+        {/* Schemes are load-bearing here in a way the other selectors are not:
+            every downstream term and type above is keyed off them, so a failed
+            load empties the wizard rather than merely narrowing it. Rendering
+            it anyway would present an application that cannot be completed and
+            would misreport a denial or an outage as "no schemes are offered". */}
+        {schemeResult.status !== "ok" ? (
+          <p className="rounded-2xl border border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+            We could not load the loan schemes, so an application cannot be
+            started right now. Please try again.
+          </p>
+        ) : (
+          <ApplicationWizard
+            customers={
+              customerResult.status === "ok" ? customerResult.customers : []
+            }
+            schemes={schemes}
+            purposeOptions={purposeOptions}
+            schemeTerms={schemeTerms}
+            schemeTypes={schemeTypes}
+            canOverrideRate={hasPermissions(
+              user,
+              PERMISSIONS.LOANS_APPLICATIONS_OVERRIDE_RATE,
+            )}
+          />
+        )}
       </div>
     </div>
   );

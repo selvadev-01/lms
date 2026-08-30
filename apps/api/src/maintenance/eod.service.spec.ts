@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 
 import type { RequestMeta } from '../auth/auth.service';
 import type { AuthContext } from '../common/auth-context';
+import type { SessionService } from '../auth/session.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { BusinessCalendarService } from '../settings/business-calendar.service';
 import { EOD_STEPS, eodStepsInOrder } from './eod-step.registry';
@@ -100,6 +101,9 @@ function harness() {
     prisma as unknown as PrismaService,
     jobs as unknown as MaintenanceJobService,
     calendar as unknown as BusinessCalendarService,
+    {
+      pruneDeadSessions: jest.fn().mockResolvedValue(0),
+    } as unknown as SessionService,
   );
 
   return { service, prisma, jobs, calendar };
@@ -346,6 +350,12 @@ describe('EOD step registry — Module 17 owns the runner, not the work', () => 
         branchId: null,
         businessDate: TODAY,
         prisma: prisma as unknown as PrismaService,
+        // Session pruning is not financial work, so it is stubbed rather than
+        // routed through the forbidden-table proxy — what this test asserts is
+        // that no step reaches the ledger, not that no step writes at all.
+        sessions: {
+          pruneDeadSessions: jest.fn().mockResolvedValue(0),
+        } as unknown as SessionService,
       });
 
       expect(violations).toEqual([]);
@@ -362,5 +372,61 @@ describe('EOD step registry — Module 17 owns the runner, not the work', () => 
   it('orders steps by sequence rather than array position', () => {
     const ordered = eodStepsInOrder().map((step) => step.sequence);
     expect(ordered).toEqual([...ordered].sort((a, b) => a - b));
+  });
+});
+
+/**
+ * The one registered step that writes.
+ *
+ * It is consistent with this module's rule — that rule keeps the runner out of
+ * the *ledger*, and `user_sessions` is not financial data — but it is the
+ * exception, so what it does is pinned here rather than left to the guard test
+ * above, which only asserts what a step must not touch.
+ */
+describe('EOD_PRUNE_DEAD_SESSIONS', () => {
+  const step = EOD_STEPS.find((s) => s.code === 'EOD_PRUNE_DEAD_SESSIONS')!;
+
+  function contextWith(pruned: number) {
+    const pruneDeadSessions = jest.fn().mockResolvedValue(pruned);
+    return {
+      pruneDeadSessions,
+      context: {
+        orgId: ORG_ID,
+        branchId: null,
+        businessDate: TODAY,
+        prisma: {} as unknown as PrismaService,
+        sessions: { pruneDeadSessions } as unknown as SessionService,
+      },
+    };
+  }
+
+  it('is registered', () => {
+    expect(step).toBeDefined();
+  });
+
+  it('delegates to the session service and reports what it removed', async () => {
+    const { pruneDeadSessions, context } = contextWith(12);
+
+    const result = await step.run(context);
+
+    expect(pruneDeadSessions).toHaveBeenCalled();
+    expect(result.processed).toBe(12);
+  });
+
+  /**
+   * One run is bounded so a first pass over a long-grown table cannot lock the
+   * whole backlog. When it fills that budget the operator must be told the
+   * table is not yet clear, or a partial prune reads as a complete one.
+   */
+  it('says so when more rows remain than one run removes', async () => {
+    const { context } = contextWith(5000);
+
+    const result = await step.run(context);
+
+    expect(result.summary).toMatch(/more remain/);
+  });
+
+  it('is retryable, because deleting by an absolute cutoff is idempotent', () => {
+    expect(step.retryable).toBe(true);
   });
 });

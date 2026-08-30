@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@lms/constants";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { requirePermissions } from "@/features/auth/utils/require-permissions";
 import { TrialBalanceTable, fetchTrialBalance } from "@/features/accounting";
+import DateField from "@/components/form/DateField";
 
 export const metadata: Metadata = {
   title: "Trial Balance",
@@ -45,12 +46,11 @@ export default async function TrialBalancePage({
               >
                 As of
               </label>
-              <input
+              <DateField
                 id="tb-as-of"
                 name="asOfDate"
-                type="date"
                 defaultValue={params.asOfDate}
-                className="h-11 rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90"
+                bare
               />
             </div>
 

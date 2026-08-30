@@ -23,6 +23,7 @@ import {
   type CollectionFormState,
 } from "../actions/collection-actions";
 import AllocationSummary from "./AllocationSummary";
+import { todayIso } from "@/lib/business-date";
 
 /**
  * Take a payment against a loan (Scenarios 5, 6, 7, 9, 10, 11, 12).
@@ -208,7 +209,9 @@ export default function CollectForm({
             label="Collection Date"
             required
             type="date"
-            defaultValue={new Date().toISOString().slice(0, 10)}
+            // The Kolkata business date, not `toISOString()`. That returns the
+            // UTC date, so an evening collection defaulted to yesterday.
+            defaultValue={todayIso()}
             errors={state.errors?.collectionDate}
           />
 

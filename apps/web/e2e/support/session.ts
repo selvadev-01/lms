@@ -28,6 +28,24 @@ export const SEED_PASSWORD = "Kestrel7Vault";
 export const ORG_CODE = "DEMO";
 export const API_BASE = process.env.API_BASE_URL ?? "http://localhost:3001";
 
+/**
+ * The origin the API's CSRF guard accepts, and the custom header it requires.
+ *
+ * Every direct-to-API mutation in the suite must carry both — the guard refuses
+ * a mutating request without them, and it does so with 403 before the handler
+ * runs, which a test asserting some *other* refusal will happily mistake for
+ * the rule it meant to exercise.
+ *
+ * Exported so a spec that builds its own request rather than using `apiAs` can
+ * spread it instead of rediscovering the requirement from a puzzling 403.
+ */
+export const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://localhost:3000";
+
+export const CSRF_HEADERS: Record<string, string> = {
+  Origin: WEB_ORIGIN,
+  "X-LMS-Request": "1",
+};
+
 /** Where `auth.setup.ts` writes each role's signed-in browser state. */
 export const STORAGE_STATE = {
   superAdmin: "e2e/.auth/super-admin.json",
@@ -171,18 +189,38 @@ export async function apiAs(
   const cookie = await cookieHeader(request, mobile);
   const url = (path: string) => `${API_BASE}/api/v1${path}`;
 
+  /**
+   * What the API's CSRF guard requires on a mutating request.
+   *
+   * This client speaks to the API directly rather than through the web tier, so
+   * nothing sets these for it — and without them every mutation here is refused
+   * with 403 before it reaches the handler, which reads as the endpoint
+   * rejecting the payload rather than as the request never arriving.
+   *
+   * A test asserting a *refusal* is the trap: `expect(status).toBe(400)` sees
+   * 403 and reports a validation rule that was never actually exercised.
+   */
+  const csrf = CSRF_HEADERS;
+
   return {
     get: (path) => request.get(url(path), { headers: { cookie } }),
     post: (path, data, headers) =>
       request.post(url(path), {
-        headers: { cookie, ...headers },
+        headers: { cookie, ...csrf, ...headers },
         data: data ?? {},
       }),
     put: (path, data) =>
-      request.put(url(path), { headers: { cookie }, data: data ?? {} }),
+      request.put(url(path), {
+        headers: { cookie, ...csrf },
+        data: data ?? {},
+      }),
     patch: (path, data) =>
-      request.patch(url(path), { headers: { cookie }, data: data ?? {} }),
-    delete: (path) => request.delete(url(path), { headers: { cookie } }),
+      request.patch(url(path), {
+        headers: { cookie, ...csrf },
+        data: data ?? {},
+      }),
+    delete: (path) =>
+      request.delete(url(path), { headers: { cookie, ...csrf } }),
   };
 }
 
@@ -279,7 +317,11 @@ export async function attachRequiredDocuments(
       request.post(
         `${API_BASE}/api/v1/loan-applications/${applicationId}/documents`,
         {
-          headers: { cookie },
+          // A multipart upload is a mutation like any other, so the CSRF guard
+          // requires these too. Without them the upload is refused with 403 and
+          // reported here as an upload failure, which points at the endpoint
+          // rather than at the missing headers.
+          headers: { cookie, ...CSRF_HEADERS },
           multipart: {
             documentType,
             file: {

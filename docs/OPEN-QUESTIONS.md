@@ -409,8 +409,8 @@ Appears in Sign-In, Signup, Reset-Password, Change-Password, Forgot-Password —
 
 | ID       | Question                                                                              | Raised in          | Status | Decision |
 | -------- | ------------------------------------------------------------------------------------- | ------------------ | ------ | -------- |
-| Q-ACT-1  | How is the first Super Admin of a new organization provisioned?                       | Signup 1           | OPEN   |          |
-| Q-ACT-2  | Who is authorized to create a new organization and its first Super Admin?             | Signup 2           | OPEN   |          |
+| Q-ACT-1  | How is the first Super Admin of a new organization provisioned?                       | Signup 1           | RESOLVED | Created synchronously in the same transaction as the organization, by `OrganizationProvisioningService`, with `branchId: null` (organization-wide), `status: ACTIVE` and the SUPER_ADMIN system role. No activation token and no PENDING state: the person setting the password is the person who typed it seconds earlier, so a round-trip proves nothing. This does not settle Q-ACT-3..14 — those govern *admin invites employee*, a different flow with a genuine absent party. |
+| Q-ACT-2  | Who is authorized to create a new organization and its first Super Admin?             | Signup 2           | RESOLVED | Nobody, unless `ALLOW_PUBLIC_SIGNUP=true`, in which case anyone who can reach `POST /auth/sign-up` — rate limited to 3/min/IP. The endpoint always exists and returns 404 while disabled, so it is indistinguishable from a route that was never built. Intended for local development and controlled trials; there is no email or mobile verification, so a deployment that switches it on accepts that anyone reaching it may create a tenant. |
 | Q-ACT-3  | Activation token delivery channel — SMS, email, or both?                              | Signup 3           | OPEN   |          |
 | Q-ACT-4  | Email is optional in Module 3 — can activation rely on it, or must it be mobile-only? | Signup 4           | OPEN   |          |
 | Q-ACT-5  | Exact activation-token expiry period?                                                 | Signup 5           | OPEN   |          |
@@ -558,6 +558,24 @@ meant to record the deletion. Scenarios 4, 5, 31 and 32 are therefore **not
 satisfied**, deliberately, rather than served by endpoints nothing could
 legitimately reach. Introducing a platform-admin role would answer them, and is
 a larger design question than this story.
+
+> **Superseded in part.** An organization-create now exists as
+> `POST /auth/sign-up`, gated behind `ALLOW_PUBLIC_SIGNUP` (Q-ACT-1, Q-ACT-2).
+> The audit objection above does not apply to it: that objection describes a
+> *cross-tenant administrator*, who belongs to a different organization than the
+> one being created and therefore has no correct `orgId` to scope against. The
+> signup path has no actor at all until it mints one, and it does so inside the
+> same transaction — so by the time the `ORG_SIGNUP_COMPLETED` row is written,
+> both halves of the composite actor key exist and the row is scoped to the new
+> organization, actored by its own first Super Admin.
+>
+> **Organization-delete remains unbuilt, and the cascade objection stands** — it
+> is now demonstrated rather than predicted. Deleting an organization cascades
+> to `audit_logs`, where the Module 17 append-only trigger (Rules 46-47) refuses
+> the DELETE outright, so the operation fails at the database. A signed-up
+> organization cannot be removed through the ORM at all; doing so requires
+> disabling that trigger, which is exactly the evidence-destroying act it exists
+> to prevent. Scenarios 5 and 32 stay unsatisfied.
 
 **Deletion policy (Q-ORG-11, Q-ORG-12).** **Physical delete, guarded by a
 pre-count.** `DELETE /branches/:branchId` counts all thirteen branch-scoped

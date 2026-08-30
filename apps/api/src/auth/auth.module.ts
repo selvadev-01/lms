@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 
+import { OrganizationsModule } from '../organizations/organizations.module';
 import { SmsModule } from '../sms/sms.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -9,6 +10,7 @@ import { PasswordService } from './password.service';
 import { RecoveryService } from './recovery.service';
 import { SessionManagementService } from './session-management.service';
 import { SessionModule } from './session.module';
+import { SignUpService } from './sign-up.service';
 
 @Module({
   imports: [
@@ -19,6 +21,9 @@ import { SessionModule } from './session.module';
     // validate sessions per request; AuthModule consumes it like any other.
     SessionModule,
     SmsModule,
+    // For OrganizationProvisioningService. OrganizationsModule does not import
+    // AuthModule, so there is no cycle to forwardRef around.
+    OrganizationsModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -27,6 +32,7 @@ import { SessionModule } from './session.module';
     PasswordPolicyService,
     RecoveryService,
     SessionManagementService,
+    SignUpService,
   ],
   exports: [
     AuthService,

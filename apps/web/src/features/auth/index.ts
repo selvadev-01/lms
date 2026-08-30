@@ -3,6 +3,7 @@
  * here, never from the internal folders.
  */
 export { default as SignInForm } from "./components/SignInForm";
+export { default as SignUpForm } from "./components/SignUpForm";
 export { default as ForgotPasswordForm } from "./components/ForgotPasswordForm";
 export { default as VerifyOtpForm } from "./components/VerifyOtpForm";
 export { default as ResetPasswordForm } from "./components/ResetPasswordForm";
@@ -10,6 +11,7 @@ export { default as ChangePasswordForm } from "./components/ChangePasswordForm";
 export { default as ActiveSessionsList } from "./components/ActiveSessionsList";
 
 export { signInAction, type SignInState } from "./actions/sign-in.action";
+export { signUpAction, type SignUpState } from "./actions/sign-up.action";
 export { signOutAction } from "./actions/sign-out.action";
 export {
   forgotPasswordAction,
@@ -38,6 +40,7 @@ export { getSession, requireSession, RESET_TOKEN_COOKIE } from "./api/session";
 export { fetchActiveSessions, type SessionsResult } from "./api/sessions";
 export { dashboardPathFor } from "./utils/dashboard-path";
 export { signInSchema, type SignInInput } from "./schemas/sign-in.schema";
+export { signUpSchema, type SignUpInput } from "./schemas/sign-up.schema";
 export {
   forgotPasswordSchema,
   verifyOtpSchema,

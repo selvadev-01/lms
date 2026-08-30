@@ -1,0 +1,18 @@
+-- Module 03 — an administrator may set an account's first password.
+--
+-- Until now `UserService.create` always wrote `password_hash = NULL` and left
+-- the account PENDING, which no path could recover from: sign-in requires
+-- ACTIVE, password recovery admits only ACTIVE and LOCKED, and Change Password
+-- needs a session the account could never obtain. A provisioned user was a dead
+-- end.
+--
+-- An administrator-chosen password fixes that, at the cost of the password
+-- being known to two people. This column confines that window: while it is true
+-- the account reaches nothing but Change Password.
+--
+-- DEFAULT false is the safe backfill. Every existing row either chose its own
+-- password (signup, recovery reset, self-change) or has none at all, and in
+-- neither case is there a borrowed credential to force out. Backfilling true
+-- would lock every current user out of everything until they changed a password
+-- they had no reason to distrust.
+ALTER TABLE "users" ADD COLUMN "must_change_password" BOOLEAN NOT NULL DEFAULT false;

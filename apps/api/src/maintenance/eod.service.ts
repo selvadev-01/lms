@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 
 import type { RequestMeta } from '../auth/auth.service';
 import type { AuthContext } from '../common/auth-context';
+import { SessionService } from '../auth/session.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveBranchScope } from '../reports/report-scope';
 import { BusinessCalendarService } from '../settings/business-calendar.service';
@@ -47,6 +48,7 @@ export class EodService {
     private readonly prisma: PrismaService,
     private readonly jobs: MaintenanceJobService,
     private readonly calendar: BusinessCalendarService,
+    private readonly sessions: SessionService,
   ) {}
 
   /**
@@ -207,6 +209,7 @@ export class EodService {
           branchId,
           businessDate,
           prisma: this.prisma,
+          sessions: this.sessions,
         });
 
         processed += result.processed;

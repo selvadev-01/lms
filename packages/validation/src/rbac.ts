@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 import { optionsFrom } from "./options";
+// Direct module import, not via the barrel: ./index re-exports this file, so
+// going through it would be a cycle.
+import { PASSWORD_MIN_LENGTH } from "./password-policy";
 import { emailSchema, idSchema, mobileField, optionalText } from "./primitives";
 
 /**
@@ -127,15 +130,77 @@ const roleIdsField = z
  *
  * `status` is accepted but the service constrains it: a freshly created account
  * has no password, so ACTIVE would mean "live account nobody can sign in to".
+ * Supplying `password` is what makes ACTIVE truthful, and the service promotes
+ * the account itself rather than trusting the status the form sent.
+ *
+ * `password` is optional. Omitting it keeps the older behaviour — no credential,
+ * account PENDING — which is still the right answer when the person will set
+ * their own. Supplying one activates the account immediately and forces a change
+ * at first sign-in, because a password an administrator typed is known to two
+ * people until the user replaces it.
+ *
+ * `confirmPassword` never leaves the browser. It catches a typo in a masked
+ * field; the API receives one password and either accepts it or does not.
  */
-export const createUserSchema = z.object({
+const createUserFields = {
   name: z.string().trim().min(1, "Full Name is required").max(200),
   mobile: mobileField,
   email: optionalText(320).pipe(emailSchema.optional()),
   branchId: optionalText(64),
   roleIds: roleIdsField,
   status: userStatusSchema,
-});
+  password: optionalText(200),
+  confirmPassword: optionalText(200),
+};
+
+/**
+ * The cross-field rules, applied to whichever object shape needs them.
+ *
+ * Defined as a function rather than chained once because `.superRefine` does not
+ * survive `.extend()` — the employee schema extends this one, and a refinement
+ * left on the base would silently stop running there. Re-applying it explicitly
+ * is what keeps both forms enforcing the same rule.
+ */
+function withPasswordRules<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
+  return schema.superRefine((value, ctx) => {
+    const password = (value as { password?: string }).password;
+    const confirmPassword = (value as { confirmPassword?: string })
+      .confirmPassword;
+
+    if (!password) {
+      // Nothing to confirm. A stray confirmation on its own is not an error —
+      // it just has no password to disagree with.
+      return;
+    }
+
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
+      });
+    }
+
+    if (!confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmPassword"],
+        message: "Confirm the password",
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmPassword"],
+        message: "Passwords do not match",
+      });
+    }
+  });
+}
+
+export const createUserSchema = withPasswordRules(z.object(createUserFields));
 
 /**
  * Administrator edit.
@@ -156,10 +221,13 @@ export const updateUserSchema = z.object({
  * rather than optional: an employee has a code (that is what makes the record an
  * employee) and belongs to a branch (Q-RBAC-6 — field work happens somewhere).
  */
-export const createEmployeeSchema = createUserSchema.extend({
-  employeeCode: employeeCodeSchema,
-  branchId: idSchema.min(1, "Branch is required"),
-});
+export const createEmployeeSchema = withPasswordRules(
+  z.object({
+    ...createUserFields,
+    employeeCode: employeeCodeSchema,
+    branchId: idSchema.min(1, "Branch is required"),
+  }),
+);
 
 export const updateEmployeeSchema = updateUserSchema;
 

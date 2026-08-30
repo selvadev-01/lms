@@ -15,6 +15,32 @@ function int(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * Reads the `zeit/ms` duration strings `jsonwebtoken` accepts — `900`, `'15m'`,
+ * `'2h'`, `'7d'` — into milliseconds.
+ *
+ * Only the units `jsonwebtoken` itself honours are supported, so a value this
+ * cannot parse is one it would also reject. Such a value falls back rather than
+ * throwing: the string is still handed to `signAsync` unchanged, and letting
+ * that library report its own malformed input keeps one authority on the format
+ * instead of two that can disagree.
+ */
+export function durationMs(
+  value: string | undefined,
+  fallback: number,
+): number {
+  if (!value) return fallback;
+
+  const match = /^(\d+)\s*(ms|s|m|h|d)?$/.exec(value.trim());
+  if (!match) return fallback;
+
+  const amount = Number.parseInt(match[1], 10);
+  const unit = match[2] ?? 'ms';
+  const scale = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+
+  return amount * scale[unit as keyof typeof scale];
+}
+
 export default registerAs('auth', () => ({
   // --- Password hashing (Q-PWD-9) -----------------------------------------
   /** argon2id is the OWASP-recommended choice for new applications. */
@@ -49,7 +75,31 @@ export default registerAs('auth', () => ({
 
   // --- Session lifetimes (Q-SESS-27, Q-SESS-28) ---------------------------
   accessTokenTtl: process.env.AUTH_ACCESS_TTL ?? '15m',
+
+  /**
+   * The same lifetime in milliseconds, for the access cookie's `maxAge`.
+   *
+   * Derived rather than written twice. The controller used to hard-code
+   * `15 * 60 * 1000`, so raising `AUTH_ACCESS_TTL` produced a token that
+   * outlived the cookie carrying it — the session would end early, at the
+   * cookie's expiry, for reasons nothing in the config explained.
+   */
+  accessTokenTtlMs: durationMs(process.env.AUTH_ACCESS_TTL, 15 * 60 * 1000),
+
   refreshTokenTtlDays: int(process.env.AUTH_REFRESH_TTL_DAYS, 7),
+
+  /**
+   * How long a dead session row is kept before `pruneDeadSessions` removes it.
+   *
+   * Rotation writes a row per refresh, so without pruning `user_sessions` grows
+   * without bound — and it is read on every authenticated request. 90 days
+   * keeps a session's IP, user agent and revocation reason available for the
+   * period an investigation would plausibly reach back over; the audit log
+   * retains the events themselves for longer and is never pruned.
+   *
+   * 0 disables pruning entirely, keeping every row for ever.
+   */
+  sessionRetentionDays: int(process.env.AUTH_SESSION_RETENTION_DAYS, 90),
 
   /**
    * 0 means unlimited. The concurrent-session policy is undefined by the source
@@ -160,6 +210,31 @@ export default registerAs('auth', () => ({
   jwtSecret: process.env.AUTH_JWT_SECRET as string,
 
   webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
+
+  /**
+   * Reverse proxies in front of this process — see `main.ts`.
+   *
+   * 0 (the default) means directly exposed, and is the safe value: it makes
+   * Express ignore `X-Forwarded-For` entirely, so a client cannot spoof its own
+   * address. Behind one load balancer this must be 1, or every request is
+   * attributed to the balancer and the per-IP rate limits stop distinguishing
+   * callers at all.
+   */
+  trustedProxyHops: int(process.env.TRUSTED_PROXY_HOPS, 0),
+
+  /**
+   * Per-IP ceiling per minute for every endpoint without a stricter named limit.
+   *
+   * Lives here, in a `registerAs` factory, rather than being read from
+   * `process.env` at the throttler's own call site. That is not tidiness: a
+   * `registerAs` factory is evaluated when ConfigModule loads it, by which point
+   * `.env` has been read, whereas the throttler factory's own body ran against a
+   * `process.env` that did not yet carry the file's values — so a configured
+   * limit was silently ignored and the default applied instead.
+   *
+   * Sized for the dashboard, which spends nine requests on one page view.
+   */
+  defaultRateLimit: int(process.env.DEFAULT_RATE_LIMIT, 240),
 }));
 
 export const ACCESS_COOKIE = 'lms_at';

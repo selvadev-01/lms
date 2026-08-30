@@ -634,10 +634,19 @@ export class RecoveryService {
        * `failedLoginAttempts`, `branchId` and every role assignment are
        * deliberately absent from this update — omitting them is the mechanism
        * by which Scenarios 11-14, 29 and 30 hold.
+       *
+       * `mustChangePassword` is the exception, cleared for the same reason
+       * Change Password clears it: the flag says a password someone else chose
+       * is still in force, and a self-service reset makes that untrue. Leaving
+       * it set would confine an account to a screen it had just finished with.
        */
       await tx.user.update({
         where: { orgId_userId: { orgId, userId } },
-        data: { passwordHash, passwordChangedAt: now },
+        data: {
+          passwordHash,
+          passwordChangedAt: now,
+          mustChangePassword: false,
+        },
       });
 
       /**

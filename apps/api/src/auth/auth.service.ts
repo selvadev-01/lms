@@ -85,8 +85,10 @@ export class AuthService {
       select: { orgId: true, code: true, status: true },
     });
 
-    // Unknown or inactive tenant. No orgId exists, so no audit row is possible
-    // (orgId is part of the audit primary key); this is logged instead.
+    // Unknown or inactive tenant. No orgId exists, so no `audit_logs` row is
+    // possible — orgId is half its primary key and a foreign key — and the
+    // attempt is recorded in `untenanted_audit_logs` instead, which carries no
+    // organization reference for exactly this case.
     if (!organization || organization.status !== 'ACTIVE') {
       this.audit.recordUnresolvableTenant({
         orgCode: dto.orgCode,
@@ -317,6 +319,10 @@ export class AuthService {
           permissions,
           branchId: user.branchId ?? undefined,
           branchName: branch?.name ?? undefined,
+          // Lets the client route straight to Change Password. The guard
+          // enforces the same thing server-side, so this is a courtesy rather
+          // than the control.
+          mustChangePassword: user.mustChangePassword,
         };
 
         return {
@@ -352,6 +358,8 @@ export class AuthService {
     const accessToken = await this.jwt.signAsync(outcome.payload, {
       secret: this.config.get<string>('auth.jwtSecret'),
       expiresIn: this.accessTtl(),
+      // Stated explicitly so it cannot drift from the guard's allow-list.
+      algorithm: 'HS256',
     });
 
     return {
@@ -367,9 +375,54 @@ export class AuthService {
     rawRefreshToken: string,
     meta: RequestMeta,
   ): Promise<SignInResult> {
-    const existing =
-      await this.sessions.findActiveByRefreshToken(rawRefreshToken);
-    if (!existing) throw new UnauthorizedException('Invalid session');
+    const presented = await this.sessions.classifyRefreshToken(rawRefreshToken);
+
+    /**
+     * Reuse detection (OWASP): rotation alone is close to worthless without it.
+     *
+     * A token that was already rotated away should never come back — the
+     * legitimate holder was handed a replacement at the moment it was spent. So
+     * a replay means either that holder raced itself, or a copy is in someone
+     * else's hands, and nothing here can tell the two apart. Assuming theft is
+     * the only safe reading, so the whole family goes: every session this user
+     * holds is revoked and they must sign in again.
+     *
+     * Refusing the single replay — which is all rotation did before — leaves
+     * the thief's *other* stolen session untouched, which is the one that
+     * matters.
+     */
+    if (presented.kind === 'reused') {
+      const revoked = await this.sessions.revokeAllForUser(
+        presented.session.orgId,
+        presented.session.userId,
+        SESSION_REVOKE_REASON.REFRESH_TOKEN_REUSED,
+      );
+
+      await this.audit.record({
+        orgId: presented.session.orgId,
+        actorUserId: presented.session.userId,
+        action: AuditAction.REFRESH_REUSE_DENIED,
+        entityType: 'UserSession',
+        entityId: presented.session.sessionId,
+        requestId: meta.requestId,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        metadata: {
+          // What the family revocation actually cost, so an investigator can
+          // tell a self-race (0-1 other sessions) from a live compromise.
+          sessionsRevoked: revoked,
+          rotatedAt: presented.session.revokedAt?.toISOString(),
+        },
+      });
+
+      throw new UnauthorizedException('Invalid session');
+    }
+
+    if (presented.kind !== 'active') {
+      throw new UnauthorizedException('Invalid session');
+    }
+
+    const existing = presented.session;
 
     const user = await this.prisma.user.findUnique({
       where: {
@@ -423,6 +476,8 @@ export class AuthService {
       {
         secret: this.config.get<string>('auth.jwtSecret'),
         expiresIn: this.accessTtl(),
+        // As at sign-in: pinned so signing and verification cannot diverge.
+        algorithm: 'HS256',
       },
     );
 
@@ -638,10 +693,20 @@ export class AuthService {
     //    That omission is the entire mechanism by which Scenarios 18, 19, 20,
     //    30 and 31 hold — there is no code to point at for them, only the
     //    absence of code, so it is stated here explicitly.
+    //
+    //    `mustChangePassword` IS cleared, and is the one addition to that list.
+    //    It records that a password someone else chose is still in force; this
+    //    is the act that makes that untrue, whether or not the flag was set.
+    //    Clearing it unconditionally is deliberate — a conditional write would
+    //    leave a stale flag confining an account whose password is now its own.
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { orgId_userId: { orgId, userId } },
-        data: { passwordHash, passwordChangedAt: now },
+        data: {
+          passwordHash,
+          passwordChangedAt: now,
+          mustChangePassword: false,
+        },
       });
       await this.policy.recordAndTrim(orgId, userId, passwordHash, tx);
       await this.audit.record(
@@ -739,6 +804,11 @@ export class AuthService {
         permissions,
         branchId: user.branchId ?? undefined,
         branchName: branch?.name ?? undefined,
+        // Read on every profile load, not just at sign-in: this is what the web
+        // shell checks before rendering, and a session that began before the
+        // password was changed must stop being confined immediately rather than
+        // at its next sign-in.
+        mustChangePassword: user.mustChangePassword,
       },
       roles,
       permissions,

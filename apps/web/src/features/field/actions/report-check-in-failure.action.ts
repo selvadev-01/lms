@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/features/auth/api/session";
+import { CSRF_HEADERS } from "@/lib/api-call";
 import { env } from "@/lib/env";
 
 import type { CheckInState } from "./submit-check-in.action";
@@ -67,6 +68,7 @@ export async function reportCheckInFailureAction(
       {
         method: "POST",
         headers: {
+          ...CSRF_HEADERS,
           "Content-Type": "application/json",
           cookie: cookieStore.toString(),
         },

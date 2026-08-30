@@ -59,7 +59,20 @@ export function parseSetCookies(headers: Headers): CookieToSet[] {
     parsed.push({
       name: pair.slice(0, separator).trim(),
       value: pair.slice(separator + 1).trim(),
-      secure: raw.toLowerCase().includes("secure"),
+      /**
+       * In production `Secure` is asserted, not inherited.
+       *
+       * Copying the API's flag means a misconfigured API — one not setting
+       * `Secure` because it believes it is behind plain HTTP — silently makes
+       * the web tier emit a session cookie that will travel unencrypted. The
+       * API's belief about its own transport is not evidence about ours.
+       *
+       * Outside production the API's value still decides, so local development
+       * over http://localhost keeps working.
+       */
+      secure:
+        process.env.NODE_ENV === "production" ||
+        raw.toLowerCase().includes("secure"),
     });
   }
 
@@ -67,18 +80,32 @@ export function parseSetCookies(headers: Headers): CookieToSet[] {
 }
 
 /**
+ * What a renewal attempt concluded.
+ *
+ * The three arms are deliberately distinct. Collapsing `"retry"` into `null` is
+ * what let a rate limit sign a working user out.
+ */
+export type RefreshOutcome =
+  /** Renewed. Set these cookies. */
+  | CookieToSet[]
+  /** The API refused the session. End it. */
+  | null
+  /** The API could not answer. Leave the cookies alone and carry on. */
+  | "retry";
+
+/**
  * Exchanges the refresh cookie for a new session, without persisting anything.
  *
- * Returns the cookies to set, or `null` when the session cannot be renewed —
- * revoked, idle-expired, past its absolute lifetime, or the API is unreachable.
- * A `null` means the caller must end the session; it never means "try again".
+ * Returns the cookies to set, `null` when the API refused the session — revoked,
+ * idle-expired, or past its absolute lifetime — and `"retry"` when the API could
+ * not answer at all. Only `null` means the caller must end the session.
  *
  * The decision is entirely the API's. This cannot extend a session the server
  * considers over, which is what keeps the idle and absolute policies intact.
  */
 export async function refreshSession(
   cookieHeader: string,
-): Promise<CookieToSet[] | null> {
+): Promise<RefreshOutcome> {
   if (!cookieHeader) return null;
 
   try {
@@ -88,6 +115,17 @@ export async function refreshSession(
       cache: "no-store",
     });
 
+    /**
+     * A rate-limited or broken API has not said the session is over.
+     *
+     * Returning null here signed the user out on a 429, which `proxy.ts` then
+     * turned into a redirect to sign-in while a valid refresh token sat in the
+     * cookie jar. Only the API's own refusal — 401 or 403 — ends a session;
+     * anything else leaves the cookies alone so the next navigation can retry.
+     */
+    if (!response.ok && response.status !== 401 && response.status !== 403) {
+      return "retry";
+    }
     if (!response.ok) return null;
 
     const cookies = parseSetCookies(response.headers);
@@ -95,8 +133,10 @@ export async function refreshSession(
     // was renewed while the browser still holds the expired one.
     return cookies.length > 0 ? cookies : null;
   } catch {
-    // API unreachable. Fail closed: the caller ends the session rather than
-    // rendering as though the user were still authenticated.
-    return null;
+    // API unreachable. Not a statement about the session, so the cookies are
+    // left alone — the caller carries on and the next navigation retries.
+    // Nothing is granted by this: the access token is still absent, so every
+    // read still fails closed until the API answers again.
+    return "retry";
   }
 }

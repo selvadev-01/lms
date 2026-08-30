@@ -4,8 +4,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+import { CSRF_HEADERS } from "@/lib/api-call";
 import { env } from "@/lib/env";
-import { ACCESS_COOKIE, REFRESH_COOKIE } from "../api/session";
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  forgetCachedSession,
+} from "../api/session";
 
 export interface RevokeSessionState {
   /** Non-field error shown above the table. */
@@ -51,7 +56,7 @@ export async function revokeSessionAction(
       `${env.API_BASE_URL}/api/v1/auth/sessions/${encodeURIComponent(sessionId)}`,
       {
         method: "DELETE",
-        headers: { cookie: cookieStore.toString() },
+        headers: { ...CSRF_HEADERS, cookie: cookieStore.toString() },
         cache: "no-store",
       },
     );
@@ -82,6 +87,7 @@ export async function revokeSessionAction(
   if (typeof outcome === "object") return outcome;
 
   if (outcome === "session-ended") {
+    forgetCachedSession(cookieStore.get(ACCESS_COOKIE)?.value);
     cookieStore.delete(ACCESS_COOKIE);
     cookieStore.delete(REFRESH_COOKIE);
     redirect("/signin");

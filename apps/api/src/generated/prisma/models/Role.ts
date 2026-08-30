@@ -481,10 +481,6 @@ export type EnumRoleStatusFieldUpdateOperationsInput = {
   set?: $Enums.RoleStatus
 }
 
-export type BoolFieldUpdateOperationsInput = {
-  set?: boolean
-}
-
 export type RoleCreateNestedOneWithoutRolePermissionsInput = {
   create?: Prisma.XOR<Prisma.RoleCreateWithoutRolePermissionsInput, Prisma.RoleUncheckedCreateWithoutRolePermissionsInput>
   connectOrCreate?: Prisma.RoleCreateOrConnectWithoutRolePermissionsInput

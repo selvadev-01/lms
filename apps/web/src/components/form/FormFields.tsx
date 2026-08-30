@@ -5,6 +5,8 @@ import type { SelectOption } from "@lms/validation";
 import React, { useId } from "react";
 import { useFormStatus } from "react-dom";
 
+import DateField from "./DateField";
+
 /**
  * The app's form primitives.
  *
@@ -77,7 +79,34 @@ export function Field({
   // that — and duplicate ids silently break `<label for>`: the browser binds
   // every label to the *first* match, so clicking one form's label focuses the
   // other form's control. A screen reader reports the same wrong association.
+  //
+  // Called above the `type === "date"` branch below, not beside the markup that
+  // uses it: a hook after a conditional return runs on some renders and not
+  // others, which changes hook order when a caller switches `type`.
   const id = useId();
+
+  // Dates get the calendar picker, wherever they are declared.
+  //
+  // Delegated here rather than by rewriting the eighteen `type="date"` call
+  // sites: `Field` is already the app's date input, so routing it through
+  // `DateField` converts all of them at once and leaves no call site able to
+  // opt out by accident. The prop shapes are compatible by construction —
+  // `DateField` was written to match this signature.
+  if (type === "date") {
+    return (
+      <DateField
+        name={name}
+        label={label}
+        errors={errors}
+        required={required}
+        defaultValue={defaultValue}
+        value={value}
+        onChange={onChange}
+        hint={hint}
+      />
+    );
+  }
+
   return (
     <div>
       <label

@@ -22,6 +22,8 @@ import { call, endSession, type ActionState } from "@/lib/api-call";
 
 export interface EmployeeFormState extends ActionState {
   blockedBy?: UserDeleteBlocker[];
+  /** See `UserFormState.credential` — returned once, never stored. */
+  credential?: { mobile: string; password: string };
 }
 
 const SERVICE = "Employee Management";
@@ -41,22 +43,29 @@ export async function createEmployeeAction(
     branchId: formData.get("branchId"),
     roleIds: formData.getAll("roleIds"),
     status: formData.get("status"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
   });
 
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
   }
 
-  const outcome = await call(
-    "/employees",
-    { method: "POST", body: parsed.data },
-    SERVICE,
-  );
+  const { confirmPassword: _confirmPassword, ...body } = parsed.data;
+
+  const outcome = await call("/employees", { method: "POST", body }, SERVICE);
 
   if (outcome.kind === "session-ended") await endSession();
   if (outcome.kind === "failed") return outcome.state;
 
   revalidatePath("/employees");
+
+  if (body.password) {
+    return {
+      credential: { mobile: body.mobile, password: body.password },
+    };
+  }
+
   redirect("/employees");
 }
 
