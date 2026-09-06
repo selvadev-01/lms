@@ -268,6 +268,8 @@ export class OrganizationProvisioningService {
         displayOrder: spec.displayOrder,
         status: 'ACTIVE' as const,
         isSystem: true,
+        // LOAN_TYPE rows only; null elsewhere, where the question is meaningless.
+        requiresCollateral: spec.requiresCollateral ?? null,
       })),
     });
 

@@ -66,6 +66,8 @@ interface Options {
   durations?: { status: string; frequency: string; durationCount: number }[];
   documentTypes?: string[];
   schemeMissing?: boolean;
+  /** Loan type codes whose master-data row says collateral is required. */
+  securedLoanTypes?: string[];
 }
 
 function harness(options: Options = {}) {
@@ -99,6 +101,25 @@ function harness(options: Options = {}) {
             documentType,
           })),
         ),
+      ),
+    },
+    /**
+     * The `LOAN_TYPE` option behind the application's product.
+     *
+     * Whether a type is secured is master data now rather than a constant, so
+     * the completeness check reads it here. The default mirrors what the
+     * migration seeds — GOLD and VEHICLE secured, everything else not — which
+     * keeps every existing expectation in this file meaning what it did before.
+     */
+    masterDataValue: {
+      findUnique: jest.fn(
+        ({ where }: { where: { orgId_category_code: { code: string } } }) =>
+          Promise.resolve({
+            requiresCollateral:
+              options.securedLoanTypes?.includes(
+                where.orgId_category_code.code,
+              ) ?? ['GOLD', 'VEHICLE'].includes(where.orgId_category_code.code),
+          }),
       ),
     },
   } as unknown as PrismaService;
@@ -336,23 +357,77 @@ describe('each check fails independently', () => {
 });
 
 describe('required document types by product (D-APP-3)', () => {
-  it('requires ID and income for an unsecured product', () => {
-    expect(requiredDocumentTypes('PERSONAL')).toEqual(['ID', 'INCOME']);
-    expect(requiredDocumentTypes('BUSINESS')).toEqual(['ID', 'INCOME']);
+  const ORG = 'org-1';
+
+  /**
+   * A stand-in for the `LOAN_TYPE` master-data lookup.
+   *
+   * `requiresCollateral` used to be a hardcoded set naming GOLD and VEHICLE.
+   * It is now a column on the type's own row, so these tests drive the flag
+   * rather than the code — which is the whole point of the change: a tenant can
+   * mark a type secured that this file has never heard of.
+   */
+  const lookup = (rows: Record<string, boolean | null>) => ({
+    masterDataValue: {
+      findUnique: jest.fn(
+        ({ where }: { where: { orgId_category_code: { code: string } } }) => {
+          const code = where.orgId_category_code.code;
+          return Promise.resolve(
+            code in rows ? { requiresCollateral: rows[code] } : null,
+          );
+        },
+      ),
+    },
   });
 
-  it('additionally requires collateral for gold and vehicle', () => {
+  it('requires ID and income for an unsecured product', async () => {
+    const tx = lookup({ PERSONAL: false, BUSINESS: false });
+
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'PERSONAL'),
+    ).resolves.toEqual(['ID', 'INCOME']);
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'BUSINESS'),
+    ).resolves.toEqual(['ID', 'INCOME']);
+  });
+
+  it('additionally requires collateral for a type marked secured', async () => {
     // A gold loan with no collateral document is the case this exists to stop.
-    expect(requiredDocumentTypes('GOLD')).toEqual([
-      'ID',
-      'INCOME',
-      'COLLATERAL',
-    ]);
-    expect(requiredDocumentTypes('VEHICLE')).toEqual([
-      'ID',
-      'INCOME',
-      'COLLATERAL',
-    ]);
+    const tx = lookup({ GOLD: true, VEHICLE: true });
+
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'GOLD'),
+    ).resolves.toEqual(['ID', 'INCOME', 'COLLATERAL']);
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'VEHICLE'),
+    ).resolves.toEqual(['ID', 'INCOME', 'COLLATERAL']);
+  });
+
+  // The reason the flag exists: a type this codebase has never heard of must be
+  // able to demand collateral. The old hardcoded set could not express this.
+  it('honours the flag on a tenant-defined loan type', async () => {
+    const tx = lookup({ TRACTOR: true, POULTRY: false });
+
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'TRACTOR'),
+    ).resolves.toEqual(['ID', 'INCOME', 'COLLATERAL']);
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'POULTRY'),
+    ).resolves.toEqual(['ID', 'INCOME']);
+  });
+
+  // Deliberately not-secured, matching what the hardcoded set returned for any
+  // type outside the two it named. An invented requirement would make the
+  // application unsubmittable with nothing on screen naming the missing document.
+  it('treats an unknown or unflagged type as unsecured', async () => {
+    const tx = lookup({ LEGACY: null });
+
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'LEGACY'),
+    ).resolves.toEqual(['ID', 'INCOME']);
+    await expect(
+      requiredDocumentTypes(tx as never, ORG, 'GONE'),
+    ).resolves.toEqual(['ID', 'INCOME']);
   });
 
   it('demands collateral on a gold application that lacks it', async () => {

@@ -279,6 +279,13 @@ export const PERMISSION_CATALOG: readonly PermissionSpec[] = [
     description: 'Activate or deactivate a customer.',
   },
   {
+    code: 'customers.mobile.verify',
+    module: 'customers',
+    action: 'mobile_verify',
+    description:
+      "Send and confirm a LOCAL customer's mobile verification code.",
+  },
+  {
     code: 'customers.convert',
     module: 'customers',
     action: 'convert',

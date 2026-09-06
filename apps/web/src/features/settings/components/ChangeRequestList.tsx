@@ -63,8 +63,10 @@ export default function ChangeRequestList({
     );
   }
 
-  const banner = approveState.message ?? rejectState.message ?? cancelState.message;
-  const success = approveState.success ?? rejectState.success ?? cancelState.success;
+  const banner =
+    approveState.message ?? rejectState.message ?? cancelState.message;
+  const success =
+    approveState.success ?? rejectState.success ?? cancelState.success;
 
   return (
     <div className="space-y-5">
@@ -113,12 +115,12 @@ export default function ChangeRequestList({
                       {change.changeReason}
                     </div>
                     {change.rejectionReason ? (
-                      <div className="mt-1 text-xs text-error-500">
+                      <div className="text-error-500 mt-1 text-xs">
                         Rejected: {change.rejectionReason}
                       </div>
                     ) : null}
                     {change.failureReason ? (
-                      <div className="mt-1 text-xs text-error-500">
+                      <div className="text-error-500 mt-1 text-xs">
                         Could not apply: {change.failureReason}
                       </div>
                     ) : null}
@@ -136,7 +138,7 @@ export default function ChangeRequestList({
                             />
                             <button
                               type="submit"
-                              className="text-xs font-medium text-success-600 hover:underline"
+                              className="text-success-600 text-xs font-medium hover:underline"
                             >
                               Approve
                             </button>
@@ -150,7 +152,7 @@ export default function ChangeRequestList({
                                   : change.changeRequestId,
                               )
                             }
-                            className="text-xs font-medium text-error-500 hover:underline"
+                            className="text-error-500 text-xs font-medium hover:underline"
                           >
                             Reject
                           </button>

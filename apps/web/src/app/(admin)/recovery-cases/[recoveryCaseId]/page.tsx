@@ -66,10 +66,7 @@ export default async function RecoveryCaseDetailPage({
             user,
             PERMISSIONS.RECOVERY_NOTICES_ISSUE,
           ),
-          canWriteOff: hasPermissions(
-            user,
-            PERMISSIONS.RECOVERY_WRITEOFF_POST,
-          ),
+          canWriteOff: hasPermissions(user, PERMISSIONS.RECOVERY_WRITEOFF_POST),
         }}
       />
     </div>

@@ -20,6 +20,7 @@ import {
 } from '../../audit/audit.service';
 import type { RequestMeta } from '../../auth/auth.service';
 import type { AuthContext } from '../../common/auth-context';
+import { allocateSequentialCode } from '../../common/numbering/sequential-code';
 import { BranchService } from '../../organizations/branch.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -36,6 +37,7 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 export const CUSTOMERS_VIEW_PERMISSION = 'customers.view';
 export const CUSTOMERS_CREATE_PERMISSION = 'customers.create';
 export const CUSTOMERS_UPDATE_PERMISSION = 'customers.update';
+export const CUSTOMERS_MOBILE_VERIFY_PERMISSION = 'customers.mobile.verify';
 export const CUSTOMERS_DELETE_PERMISSION = 'customers.delete';
 export const CUSTOMERS_ACTIVATE_PERMISSION = 'customers.activate';
 export const CUSTOMERS_CONVERT_PERMISSION = 'customers.convert';
@@ -902,25 +904,6 @@ export class CustomerService {
   }
 
   /**
-   * Allocates the next customer code for an organization.
-   *
-   * Runs inside the caller's transaction so two concurrent registrations cannot
-   * both read the same maximum. The unique index on `(orgId, customerCode)` is
-   * the real guarantee — this is the allocation, not the enforcement.
-   *
-   * **The maximum is computed numerically, not by string order.** An earlier
-   * version took the first row of `orderBy: { customerCode: 'desc' }` and parsed
-   * it, which broke on any code whose suffix is not purely numeric: `CUSTZZ04`
-   * sorts above `CUST007` because `Z` > `0`, `parseInt('ZZ04')` is `NaN`, and the
-   * `NaN` fallback then re-proposed `CUST001` — a code that already existed. The
-   * result was a unique-constraint violation surfacing as an opaque 503 on every
-   * create. Codes with non-numeric suffixes are real: the e2e suite mints
-   * `CUSTZZ*` fixtures, and a branch may type its own code at creation.
-   *
-   * So every candidate is read and only the numeric ones are considered. The set
-   * is bounded by customers per organization, and this runs once per creation.
-   */
-  /**
    * Turns a duplicate customer-code collision into the 409 it is.
    *
    * Without this the unique-constraint violation reaches `AllExceptionsFilter`
@@ -944,26 +927,24 @@ export class CustomerService {
     return error;
   }
 
+  /**
+   * Allocates the next customer code for an organization.
+   *
+   * The sequence shape, the numeric-not-lexical maximum and the
+   * allocation-is-not-enforcement trade all live in `sequential-code.ts`, which
+   * Employee Management mints `EMP*` through as well. What stays here is only
+   * what is specific to customers: the prefix, the width, and the column.
+   */
   private async nextCustomerCode(
     tx: Pick<PrismaService, 'customer'>,
     orgId: string,
   ): Promise<string> {
-    const rows = await tx.customer.findMany({
-      where: { orgId, customerCode: { startsWith: 'CUST' } },
-      select: { customerCode: true },
+    return allocateSequentialCode(tx.customer, {
+      orgId,
+      column: 'customerCode',
+      prefix: 'CUST',
+      padding: 3,
     });
-
-    const highest = rows.reduce((max, row) => {
-      // Only `CUST` followed by digits to the end. `CUSTZZ04` is skipped rather
-      // than coerced, because it is not part of this sequence.
-      const match = /^CUST(\d+)$/.exec(row.customerCode);
-      if (!match) return max;
-
-      const value = Number.parseInt(match[1], 10);
-      return Number.isFinite(value) && value > max ? value : max;
-    }, 0);
-
-    return `CUST${String(highest + 1).padStart(3, '0')}`;
   }
 
   private async recordScopeDenial(

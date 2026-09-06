@@ -7,6 +7,7 @@ import {
   requirePermissions,
 } from "@/features/auth/utils/require-permissions";
 import { fetchLoanProducts, LoanProductList } from "@/features/loans";
+import { fetchMasterDataOptions } from "@/features/master-data";
 
 export const metadata: Metadata = {
   title: "Loan Products",
@@ -24,7 +25,12 @@ export const dynamic = "force-dynamic";
  */
 export default async function LoanProductsPage() {
   const user = await requirePermissions(PERMISSIONS.LOANS_PRODUCTS_VIEW);
-  const result = await fetchLoanProducts();
+  // Loan types are admin-managed master data, so the create form's options come
+  // from the tenant's own list rather than a compiled-in enum.
+  const [result, loanTypeOptions] = await Promise.all([
+    fetchLoanProducts(),
+    fetchMasterDataOptions("LOAN_TYPE"),
+  ]);
 
   return (
     <div>
@@ -33,6 +39,7 @@ export default async function LoanProductsPage() {
       <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
         <LoanProductList
           products={result.status === "ok" ? result.products : []}
+          loanTypeOptions={loanTypeOptions}
           loadError={result.status !== "ok"}
           canManage={hasPermissions(user, PERMISSIONS.LOANS_PRODUCTS_MANAGE)}
         />

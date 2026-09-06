@@ -60,7 +60,9 @@ export default async function AccountsPage({
         {canManage && (
           <div className="mb-5 flex justify-end">
             <Link href="/finance/accounts/new">
-              <Button size="sm">Add account</Button>
+              <Button type="button" size="sm">
+                Add account
+              </Button>
             </Link>
           </div>
         )}

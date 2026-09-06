@@ -209,15 +209,29 @@ function buildDb(
     user: {
       findMany: jest.fn((args: { where: Record<string, unknown> }) => {
         assertTenant(args.where, 'user.findMany');
+
+        const codeFilter = args.where.employeeCode as
+          { not?: null; startsWith?: string } | null | undefined;
+
+        // Two different queries reach this delegate and they must not be
+        // conflated. The list surface asks for `{ not: null }` — every
+        // employee. The code allocator asks for `{ startsWith: 'EMP' }` — the
+        // candidates for the next sequence number. Treating any object filter
+        // as the former made the allocator see rows whose code does not match
+        // the prefix, which is exactly the input the numeric-max rule exists to
+        // handle, so the mock would have hidden a real bug.
+        const prefix = codeFilter?.startsWith;
         const wantEmployee =
-          typeof args.where.employeeCode === 'object' &&
-          args.where.employeeCode !== null;
+          typeof codeFilter === 'object' && codeFilter !== null;
         const branchFilter = args.where.branchId as string | undefined;
         const statusFilter = args.where.status as string | undefined;
 
         return Promise.resolve(
           [...state.values()]
             .filter((u) => (u.employeeCode !== null) === wantEmployee)
+            .filter(
+              (u) => !prefix || (u.employeeCode?.startsWith(prefix) ?? false),
+            )
             .filter((u) => !branchFilter || u.branchId === branchFilter)
             .filter((u) => !statusFilter || u.status === statusFilter)
             .map(row),
@@ -607,7 +621,6 @@ describe('UserService.create', () => {
       {
         name: 'New Employee',
         mobile: '9000000090',
-        employeeCode: 'EMP090',
         branchId: BRANCH_A,
         roleIds: [FIELD_ROLE_ID],
         status: 'PENDING',
@@ -615,8 +628,53 @@ describe('UserService.create', () => {
       META,
     );
 
-    expect(result.employeeCode).toBe('EMP090');
+    // Allocated, not supplied: the DTO above carries no code, and the database
+    // is empty, so this is the first of the sequence.
+    expect(result.employeeCode).toBe('EMP001');
     expect(audit.actions()).toContain(AuditAction.EMPLOYEE_CREATED);
+  });
+
+  /** The sequence continues from the highest existing code, not from one. */
+  it('allocates the next code after the highest existing employee', async () => {
+    const db = buildDb([ADMIN, EMPLOYEE]);
+
+    const result = await makeService(db, buildAudit()).create(
+      superAdmin(),
+      'EMPLOYEE',
+      {
+        name: 'Second Employee',
+        mobile: '9000000092',
+        branchId: BRANCH_A,
+        roleIds: [FIELD_ROLE_ID],
+        status: 'PENDING',
+      },
+      META,
+    );
+
+    // EMPLOYEE holds EMP017; ADMIN holds no code and must not shift the count.
+    expect(result.employeeCode).toBe('EMP018');
+  });
+
+  /**
+   * The discriminator is what makes the record reachable through `/employees`
+   * at all, so an administrator must never receive one.
+   */
+  it('allocates no code on the administrator surface', async () => {
+    const db = buildDb([]);
+
+    const result = await makeService(db, buildAudit()).create(
+      superAdmin(),
+      'USER',
+      {
+        name: 'New Admin',
+        mobile: '9000000091',
+        roleIds: [PLAIN_ROLE_ID],
+        status: 'PENDING',
+      },
+      META,
+    );
+
+    expect(result.employeeCode).toBeUndefined();
   });
 
   it('refuses ACTIVE without a password — a live account nobody can sign in to', async () => {
@@ -772,7 +830,6 @@ describe('UserService.create', () => {
         {
           name: 'New Employee',
           mobile: '9000000090',
-          employeeCode: 'EMP090',
           branchId: BRANCH_A,
           roleIds: [FIELD_ROLE_ID],
           status: 'PENDING',
@@ -828,7 +885,6 @@ describe('UserService.create', () => {
         {
           name: 'New Employee',
           mobile: '9000000090',
-          employeeCode: 'EMP090',
           branchId: BRANCH_A,
           roleIds: [FIELD_ROLE_ID],
           status: 'PENDING',

@@ -3,10 +3,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@lms/ui";
 import Link from "next/link";
 
 import { formatDate, formatPaise } from "@/lib/format";
-import {
-  DelinquencyBucketBadge,
-  NpaStatusBadge,
-} from "./RecoveryBadges";
+import { DelinquencyBucketBadge, NpaStatusBadge } from "./RecoveryBadges";
 
 /**
  * The overdue book.
@@ -40,49 +37,49 @@ export default function OverdueList({
           <TableRow>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Loan
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Customer
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Oldest due
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Days past due
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Bucket
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               NPA
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-end font-medium text-gray-500 dark:text-gray-400"
             >
               Total overdue
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Case
             </TableCell>
@@ -95,7 +92,7 @@ export default function OverdueList({
               <TableCell className="px-5 py-4 text-start">
                 <Link
                   href={`/overdues/${overdue.loanId}`}
-                  className="text-sm font-medium text-brand-500 hover:underline"
+                  className="text-brand-500 text-sm font-medium hover:underline"
                 >
                   {overdue.loanNumber}
                 </Link>

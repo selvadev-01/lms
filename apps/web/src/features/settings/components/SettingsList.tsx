@@ -49,7 +49,10 @@ export default function SettingsList({
   branchId?: string;
 }) {
   const [editState, editAction] = useActionState(upsertSettingAction, {});
-  const [statusState, statusAction] = useActionState(setSettingStatusAction, {});
+  const [statusState, statusAction] = useActionState(
+    setSettingStatusAction,
+    {},
+  );
   const [editing, setEditing] = useState<string | null>(null);
 
   if (loadError) {
@@ -74,10 +77,18 @@ export default function SettingsList({
         <Alert variant="error" title="Not saved" message={editState.message} />
       ) : null}
       {statusState.success ? (
-        <Alert variant="success" title="Updated" message={statusState.success} />
+        <Alert
+          variant="success"
+          title="Updated"
+          message={statusState.success}
+        />
       ) : null}
       {statusState.message ? (
-        <Alert variant="error" title="Not updated" message={statusState.message} />
+        <Alert
+          variant="error"
+          title="Not updated"
+          message={statusState.message}
+        />
       ) : null}
 
       {settings.length === 0 ? (
@@ -87,7 +98,7 @@ export default function SettingsList({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-gray-200 text-xs uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
+            <thead className="border-b border-gray-200 text-xs text-gray-500 uppercase dark:border-gray-800 dark:text-gray-400">
               <tr>
                 <th className="px-3 py-2">Setting</th>
                 <th className="px-3 py-2">Value</th>
@@ -155,7 +166,7 @@ export default function SettingsList({
                                 : setting.settingId,
                             )
                           }
-                          className="text-xs font-medium text-brand-500 hover:underline"
+                          className="text-brand-500 text-xs font-medium hover:underline"
                         >
                           {editing === setting.settingId ? "Cancel" : "Edit"}
                         </button>
@@ -179,7 +190,9 @@ export default function SettingsList({
                             type="hidden"
                             name="status"
                             value={
-                              setting.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"
+                              setting.status === "ACTIVE"
+                                ? "INACTIVE"
+                                : "ACTIVE"
                             }
                           />
                           <button
@@ -225,7 +238,7 @@ export default function SettingsList({
                     the organization arrives with `branchId: null`; saving it
                     must create a branch override rather than rewrite the
                     organization value every other branch also reads. */}
-                {branchId ?? setting.branchId ? (
+                {(branchId ?? setting.branchId) ? (
                   <input
                     type="hidden"
                     name="branchId"
@@ -314,7 +327,6 @@ export default function SettingsList({
           <SubmitButton label="Add" />
         </form>
       ) : null}
-
     </div>
   );
 }

@@ -53,11 +53,21 @@ export const displayOrderSchema = z.coerce
   .min(0, "Display order cannot be negative")
   .max(9999, "Display order must be 9999 or less");
 
+/**
+ * LOAN_TYPE only: does a loan of this type need a COLLATERAL document?
+ *
+ * Optional and nullable because it is meaningless for every other category. The
+ * API rejects it outright outside LOAN_TYPE rather than storing an answer to a
+ * question nobody asked — see `MasterDataService`.
+ */
+export const requiresCollateralSchema = z.coerce.boolean().optional();
+
 export const createMasterDataValueSchema = z.object({
   category: masterDataCategorySchema,
   code: masterDataCodeSchema,
   label: masterDataLabelSchema,
   displayOrder: displayOrderSchema.optional(),
+  requiresCollateral: requiresCollateralSchema,
 });
 
 /**
@@ -73,6 +83,10 @@ export const updateMasterDataValueSchema = z.object({
   label: masterDataLabelSchema.optional(),
   displayOrder: displayOrderSchema.optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  // Editable, unlike `code`: a type marked secured by mistake must be
+  // correctable, and unlike a code this changes no stored business value —
+  // it only changes which documents future submissions require.
+  requiresCollateral: requiresCollateralSchema,
 });
 
 export type CreateMasterDataValueInput = z.infer<

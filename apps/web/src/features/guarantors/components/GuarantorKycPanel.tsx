@@ -57,7 +57,12 @@ function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <Button size="sm" variant={variant} disabled={pending || disabled}>
+    <Button
+      type="submit"
+      size="sm"
+      variant={variant}
+      disabled={pending || disabled}
+    >
       {pending ? "Working…" : label}
     </Button>
   );

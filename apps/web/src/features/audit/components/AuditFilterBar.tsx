@@ -1,4 +1,3 @@
-
 import DateField from "@/components/form/DateField";
 /**
  * Audit filters (Scenario 38).
@@ -74,7 +73,7 @@ export default function AuditFilterBar({
 
       <button
         type="submit"
-        className="h-9 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
+        className="bg-brand-500 hover:bg-brand-600 h-9 rounded-lg px-4 text-sm font-medium text-white"
       >
         Filter
       </button>
@@ -86,7 +85,7 @@ export default function AuditFilterBar({
       {canExport ? (
         <a
           href={exportHref}
-          className="h-9 rounded-lg border border-gray-300 px-4 text-sm font-medium leading-9 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          className="h-9 rounded-lg border border-gray-300 px-4 text-sm leading-9 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
         >
           Export CSV
         </a>

@@ -17,6 +17,7 @@ export const CATEGORY_LABELS: Record<MasterDataCategory, string> = {
   RELATIONSHIP: "Guarantor relationship",
   LOAN_PURPOSE: "Loan purpose",
   DOCUMENT_TYPE: "Document type",
+  LOAN_TYPE: "Loan type",
 };
 
 export default function CategoryTabs({

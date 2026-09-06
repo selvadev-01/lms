@@ -40,9 +40,13 @@ const EMPLOYEE_MOBILE = "9000000017";
 const INACTIVE_EMPLOYEE_MOBILE = "9000000018";
 const ADMIN_TARGET_MOBILE = "9000000015";
 
-/** The employee this spec creates and destroys. Never seeded. */
+/**
+ * The employee this spec creates and destroys. Never seeded.
+ *
+ * Identified by mobile and name only. The Employee ID is allocated by the
+ * server, so the spec cannot know it before the create and does not assert one.
+ */
 const SCRATCH_MOBILE = "9000000098";
-const SCRATCH_CODE = "EMP098";
 
 async function employeeIds(api: ApiClient): Promise<Record<string, string>> {
   const list = await api.get(`/employees`);
@@ -123,9 +127,11 @@ test.describe("Employee Management — Super Admin", () => {
   test("Scenario 15: an employee is added", async ({ page }) => {
     await page.goto("/employees/new");
 
+    // No Employee ID is typed, and none is offered: the server allocates it.
+    await expect(page.getByLabel(/Employee ID/)).toHaveCount(0);
+
     await page.getByLabel(/Full Name/).fill("Scratch Employee");
     await page.getByLabel(/Mobile Number/).fill(SCRATCH_MOBILE);
-    await page.getByLabel(/Employee ID/).fill(SCRATCH_CODE);
     await page
       .getByLabel(/Branch/)
       .selectOption({ label: "Chennai Main Branch" });
@@ -133,7 +139,18 @@ test.describe("Employee Management — Super Admin", () => {
     await page.getByRole("button", { name: "Create employee" }).click();
 
     await page.waitForURL("**/employees");
-    await expect(page.getByRole("cell", { name: SCRATCH_CODE })).toBeVisible();
+
+    /**
+     * The row is found by the name this test typed, not by a code it chose.
+     *
+     * Which code gets allocated depends on what else exists in the seed at the
+     * moment this runs, so asserting a literal would make the test depend on
+     * the rest of the suite. What matters is that the server assigned one at
+     * all, and that it belongs to the sequence.
+     */
+    const row = page.getByRole("row").filter({ hasText: "Scratch Employee" });
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(/EMP\d+/);
   });
 
   test("Scenario 16: only active branches are offered", async ({ page }) => {
@@ -161,7 +178,6 @@ test.describe("Employee Management — Super Admin", () => {
     const response = await api.post(`/employees`, {
       name: "Nowhere",
       mobile: "9000000097",
-      employeeCode: "EMP097",
       branchId: "11111111-1111-4111-8111-111111111111",
       roleIds: [],
       status: "PENDING",
@@ -254,7 +270,9 @@ test.describe("Employee Management — lifecycle", () => {
   }) => {
     await page.goto("/employees");
 
-    const row = page.getByRole("row").filter({ hasText: SCRATCH_CODE });
+    // Keyed by name: the code this employee carries is allocated by the server,
+    // so the spec no longer knows it up front.
+    const row = page.getByRole("row").filter({ hasText: "Scratch Employee" });
     await row.getByRole("button", { name: /Deactivate|Activate/ }).click();
     await expect(
       page.getByText(/Employee (deactivated|activated)\./),
@@ -313,7 +331,6 @@ test.describe("Employee Management — Branch Admin confinement", () => {
     const response = await api.post(`/employees`, {
       name: "Sneaky",
       mobile: "9000000096",
-      employeeCode: "EMP096",
       branchId: branches.BR001,
       roleIds: [],
       status: "PENDING",

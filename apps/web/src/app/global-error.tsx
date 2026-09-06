@@ -42,7 +42,11 @@ export default function GlobalError({
         <button
           onClick={reset}
           style={{
-            background: "#465fff",
+            // A literal, not a token: this boundary renders when the app has
+            // failed badly enough that the stylesheet may never have loaded, so
+            // `var(--color-brand-500)` could resolve to nothing. Keep it in
+            // step with `--color-brand-500` in packages/design-tokens by hand.
+            background: "#0f8a80",
             color: "#fff",
             border: 0,
             borderRadius: 8,

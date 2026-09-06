@@ -172,14 +172,30 @@ const operations: NavItem[] = [
     name: "Field Operations",
     icon: <BoxCubeIcon />,
     subItems: [
-      // The first three predate sidebar permission gating and stay ungated: a
-      // non-field user following them is redirected by the route's own guard.
-      { name: "GPS Check-in", path: "/field/check-in" },
-      { name: "Field Dashboard", path: "/field", exact: true },
+      // Gated on `field.checkin`, the permission the API's check-in controller
+      // requires and which only Field Employees hold. Both routes now enforce
+      // it themselves, so the menu and the guard agree: an admin is not offered
+      // a link that would only bounce them back to the dashboard.
+      {
+        name: "GPS Check-in",
+        path: "/field/check-in",
+        permission: PERMISSIONS.FIELD_CHECKIN,
+      },
+      {
+        name: "Field Dashboard",
+        path: "/field",
+        exact: true,
+        permission: PERMISSIONS.FIELD_CHECKIN,
+      },
       // `dashboardPathFor` sends a Branch Admin here on sign-in, so the menu
-      // has to offer a way back to it. Ungated for the same reason the two
-      // above are: the route validates the session and scope itself.
-      { name: "Branch Dashboard", path: "/branch" },
+      // has to offer a way back to it. Gated on `dashboard.view` — the same
+      // code the route now requires; see that page for why no branch-specific
+      // permission is used.
+      {
+        name: "Branch Dashboard",
+        path: "/branch",
+        permission: PERMISSIONS.DASHBOARD_VIEW,
+      },
       // Module 12, gated on the *view* permission of each surface rather than
       // the acting one — the same choice Master Data documents. A Branch Admin
       // who cannot reverse a handover still needs to see handovers, and hiding

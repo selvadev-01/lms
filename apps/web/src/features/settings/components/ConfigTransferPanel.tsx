@@ -89,12 +89,12 @@ export default function ConfigTransferPanel({
               <button
                 type="button"
                 onClick={copy}
-                className="text-xs font-medium text-brand-500 hover:underline"
+                className="text-brand-500 text-xs font-medium hover:underline"
               >
                 Copy to clipboard
               </button>
               {copied ? (
-                <span className="text-xs text-success-600">Copied.</span>
+                <span className="text-success-600 text-xs">Copied.</span>
               ) : null}
             </div>
           </>
@@ -121,7 +121,7 @@ export default function ConfigTransferPanel({
           {/* Scenario 60 — every entry that cannot be applied, so one round trip
               tells the operator all of it. */}
           {state.problems && state.problems.length > 0 ? (
-            <ul className="space-y-1 rounded-lg border border-error-200 bg-error-50 p-3 text-xs dark:border-error-500/30 dark:bg-error-500/10">
+            <ul className="border-error-200 bg-error-50 dark:border-error-500/30 dark:bg-error-500/10 space-y-1 rounded-lg border p-3 text-xs">
               {state.problems.map((problem) => (
                 <li key={`${problem.settingCode}:${problem.problem}`}>
                   <span className="font-mono font-medium">
@@ -149,7 +149,7 @@ export default function ConfigTransferPanel({
               className="w-full rounded-lg border border-gray-200 p-3 font-mono text-xs dark:border-gray-800 dark:bg-gray-900"
             />
             {state.errors?.document ? (
-              <p className="text-xs text-error-500">
+              <p className="text-error-500 text-xs">
                 {state.errors.document[0]}
               </p>
             ) : null}

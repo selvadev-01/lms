@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { AuditAction, AuditService } from '../../audit/audit.service';
 import type { RequestMeta } from '../../auth/auth.service';
@@ -66,7 +70,7 @@ type ProductRow = {
   loanProductId: string;
   code: string;
   name: string;
-  loanType: 'PERSONAL' | 'BUSINESS' | 'GOLD' | 'VEHICLE';
+  loanType: string;
   status: 'DRAFT' | 'ACTIVE' | 'INACTIVE';
   createdAt: Date;
   updatedAt: Date;
@@ -100,7 +104,11 @@ interface Harness {
  * dropped the tenant filter would start returning another organization's row and
  * the tenancy tests would fail — which is the point of modelling it at all.
  */
-function harness(rows: ProductRow[] = [buildProduct()]): Harness {
+function harness(
+  rows: ProductRow[] = [buildProduct()],
+  /** Loan type code -> its master-data status. Omit to accept any type. */
+  loanTypeOptions?: Record<string, 'ACTIVE' | 'INACTIVE'>,
+): Harness {
   const findUnique = jest.fn(
     ({
       where,
@@ -150,11 +158,34 @@ function harness(rows: ProductRow[] = [buildProduct()]): Harness {
 
   const loanScheme = { findMany: jest.fn(() => Promise.resolve([])) };
 
+  /**
+   * The `LOAN_TYPE` option list this org offers.
+   *
+   * `create` and `update` now refuse a loan type that is not an ACTIVE row
+   * here — the column is an open string since types became master data, so
+   * without this check a typo would create a product of a type no dropdown
+   * offers. The default answers ACTIVE for anything, keeping the existing tests
+   * about codes, versions and status about those things; the tests that care
+   * pass `loanTypeOptions` explicitly.
+   */
+  const masterDataValue = {
+    findUnique: jest.fn(
+      ({ where }: { where: { orgId_category_code: { code: string } } }) => {
+        const code = where.orgId_category_code.code;
+        if (!loanTypeOptions) return Promise.resolve({ status: 'ACTIVE' });
+        return Promise.resolve(
+          code in loanTypeOptions ? { status: loanTypeOptions[code] } : null,
+        );
+      },
+    ),
+  };
+
   const prisma = {
     loanProduct,
     loanScheme,
+    masterDataValue,
     $transaction: jest.fn((callback: (tx: unknown) => Promise<unknown>) =>
-      callback({ loanProduct, loanScheme }),
+      callback({ loanProduct, loanScheme, masterDataValue }),
     ),
   } as unknown as PrismaService;
 
@@ -279,6 +310,40 @@ describe('LoanProductService — create', () => {
       ConflictException,
     );
   });
+
+  // Loan types are per-tenant master data, so the column is an open string and
+  // the DTO can only check its shape. Whether the code names a real type is a
+  // question only the database can answer, and this is where it is asked.
+  it('refuses a loan type this organization does not offer', async () => {
+    const { service } = harness([], { PERSONAL: 'ACTIVE' });
+
+    await expect(
+      service.create(actor(), { ...dto, loanType: 'PERSONNAL' }, META),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  // Retiring a type is how an admin stops new products being created against
+  // it. That only works if this layer refuses it.
+  it('refuses a loan type that has been deactivated', async () => {
+    const { service } = harness([], { GOLD: 'INACTIVE' });
+
+    await expect(
+      service.create(actor(), { ...dto, loanType: 'GOLD' }, META),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  // The reason the change was made: a type this codebase never named must work.
+  it('accepts a loan type the tenant defined for itself', async () => {
+    const { service, productCreate } = harness([], { TRACTOR: 'ACTIVE' });
+
+    await service.create(actor(), { ...dto, loanType: 'TRACTOR' }, META);
+
+    // `containing` rather than a bare `objectContaining`: the latter is typed
+    // `any`, which trips no-unsafe-assignment once nested in an object literal.
+    expect(productCreate).toHaveBeenCalledWith(
+      containing({ data: containing({ loanType: 'TRACTOR' }) }),
+    );
+  });
 });
 
 describe('LoanProductService — concurrency', () => {
@@ -290,6 +355,19 @@ describe('LoanProductService — concurrency', () => {
 
   it('accepts an edit carrying the current version', async () => {
     const { service, productUpdate } = harness();
+
+    await service.update(actor(), PRODUCT_ID, update, META);
+
+    expect(productUpdate).toHaveBeenCalled();
+  });
+
+  // The loan type check runs only when the type actually changes. Re-checking an
+  // unchanged one would make a product whose type was since retired uneditable:
+  // renaming it would be refused over a field the caller never touched.
+  it('allows a rename when the unchanged loan type has been retired', async () => {
+    const { service, productUpdate } = harness(undefined, {
+      PERSONAL: 'INACTIVE',
+    });
 
     await service.update(actor(), PRODUCT_ID, update, META);
 

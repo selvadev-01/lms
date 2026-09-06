@@ -123,7 +123,7 @@ export default function JournalActions({
       <div className="flex flex-wrap items-center gap-3">
         {showEdit && (
           <Link href={`/finance/journals/${journal.journalEntryId}/edit`}>
-            <Button size="sm" variant="outline">
+            <Button type="button" size="sm" variant="outline">
               Edit draft
             </Button>
           </Link>
@@ -163,6 +163,7 @@ export default function JournalActions({
 
         {showReverse && !confirmingReverse && (
           <Button
+            type="button"
             size="sm"
             variant="outline"
             onClick={() => setConfirmingReverse(true)}

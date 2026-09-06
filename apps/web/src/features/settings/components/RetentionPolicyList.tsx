@@ -98,9 +98,11 @@ export default function RetentionPolicyList({
 
   // Immutability is a property of the CATEGORY, and the API derives it the same
   // way — this only decides whether to offer the input.
-  const newIsImmutable = ["AUDIT_LOG", "LEDGER_ENTRY", "JOURNAL_ENTRY"].includes(
-    category,
-  );
+  const newIsImmutable = [
+    "AUDIT_LOG",
+    "LEDGER_ENTRY",
+    "JOURNAL_ENTRY",
+  ].includes(category);
 
   return (
     <div className="space-y-5">
@@ -119,7 +121,7 @@ export default function RetentionPolicyList({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-left text-sm">
-            <thead className="border-b border-gray-200 text-xs uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
+            <thead className="border-b border-gray-200 text-xs text-gray-500 uppercase dark:border-gray-800 dark:text-gray-400">
               <tr>
                 <th className="px-3 py-2">Policy</th>
                 <th className="px-3 py-2">Retain</th>
@@ -191,7 +193,7 @@ export default function RetentionPolicyList({
                                 : policy.retentionPolicyId,
                             )
                           }
-                          className="text-xs font-medium text-brand-500 hover:underline"
+                          className="text-brand-500 text-xs font-medium hover:underline"
                         >
                           {editing === policy.retentionPolicyId
                             ? "Cancel"
@@ -237,7 +239,7 @@ export default function RetentionPolicyList({
                             />
                             <button
                               type="submit"
-                              className="text-xs font-medium text-error-500 hover:underline"
+                              className="text-error-500 text-xs font-medium hover:underline"
                             >
                               Delete
                             </button>
@@ -351,7 +353,10 @@ export default function RetentionPolicyList({
           <SelectField
             label="Record Category"
             name="recordCategory"
-            options={CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+            options={CATEGORIES.map((c) => ({
+              value: c.value,
+              label: c.label,
+            }))}
             value={category}
             onChange={setCategory}
             errors={createState.errors?.recordCategory}

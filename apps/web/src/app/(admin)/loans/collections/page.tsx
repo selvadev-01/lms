@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import { PERMISSIONS } from "@lms/constants";
 
-import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import { Alert } from "@lms/ui";
+import { redirect } from "next/navigation";
+
+import PageShell from "@/components/layout/PageShell";
 import { requirePermissions } from "@/features/auth/utils/require-permissions";
-import { CollectionList, fetchCollections } from "@/features/collections";
+import {
+  COLLECTIONS_PAGE_SIZE,
+  CollectionList,
+  fetchCollections,
+} from "@/features/collections";
 
 export const metadata: Metadata = {
   title: "EMI Collection",
@@ -31,31 +38,60 @@ export default async function CollectionsPage({
     status?: string;
     fromDate?: string;
     toDate?: string;
+    page?: string;
   }>;
 }) {
   await requirePermissions(PERMISSIONS.COLLECTIONS_VIEW);
   const params = await searchParams;
+
+  // A junk `?page=abc` falls back to page one rather than erroring — the URL is
+  // user-editable here, and refusing to render is the worse answer.
+  const page = Math.max(1, Number(params.page) || 1);
 
   const list = await fetchCollections({
     search: params.search,
     status: params.status,
     fromDate: params.fromDate,
     toDate: params.toDate,
+    page,
   });
 
-  return (
-    <div>
-      <PageBreadcrumb pageTitle="EMI Collection" />
+  // A 401 means the session died since the shell rendered; telling a signed-out
+  // user their collections are unavailable would leave them retrying.
+  if (list.status === "unauthenticated") redirect("/signin");
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        {list.status === "ok" ? (
-          <CollectionList collections={list.collections} />
-        ) : (
-          <p className="rounded-2xl border border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-            We could not load collections. Please try again.
-          </p>
-        )}
-      </div>
-    </div>
+  return (
+    <PageShell
+      title="EMI Collection"
+      description="Payments recorded against loan instalments."
+      breadcrumbs={[
+        { label: "Home", href: "/" },
+        { label: "Loans", href: "/loans/applications" },
+        { label: "EMI Collection" },
+      ]}
+    >
+      {list.status === "ok" ? (
+        <CollectionList
+          collections={list.collections}
+          page={page}
+          pageSize={COLLECTIONS_PAGE_SIZE}
+          total={list.total}
+          // Carried through so a page link keeps the active filters rather
+          // than resetting the screen to an unfiltered page two.
+          activeParams={{
+            search: params.search,
+            status: params.status,
+            fromDate: params.fromDate,
+            toDate: params.toDate,
+          }}
+        />
+      ) : (
+        <Alert
+          variant="error"
+          title="Collections unavailable"
+          message="We could not load collections. Please try again."
+        />
+      )}
+    </PageShell>
   );
 }

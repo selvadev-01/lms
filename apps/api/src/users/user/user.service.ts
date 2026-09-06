@@ -20,6 +20,7 @@ import { SessionService } from '../../auth/session.service';
 import { SESSION_REVOKE_REASON } from '../../auth/session-state';
 import type { AuthContext } from '../../common/auth-context';
 import { AuthorizationService } from '../../common/authorization/authorization.service';
+import { allocateSequentialCode } from '../../common/numbering/sequential-code';
 import { BranchService } from '../../organizations/branch.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AssignEmployeeDto } from './dto/assign-employee.dto';
@@ -249,8 +250,6 @@ export class UserService {
     dto: CreateUserDto | CreateEmployeeDto,
     meta: RequestMeta,
   ): Promise<UserDetail> {
-    const employeeCode =
-      'employeeCode' in dto ? (dto.employeeCode ?? null) : null;
     const branchId = dto.branchId ?? null;
 
     if (branchId) this.assertBranchInScope(actor, branchId);
@@ -270,7 +269,7 @@ export class UserService {
     }
 
     await this.assertRolesAssignable(actor, dto.roleIds, meta, null);
-    await this.assertIdentifiersFree(actor, dto, employeeCode, meta, surface);
+    await this.assertIdentifiersFree(actor, dto, meta, surface);
 
     /**
      * Hashed before the transaction opens, and only after the policy passes.
@@ -307,6 +306,30 @@ export class UserService {
             branchId,
           );
         }
+
+        /**
+         * The employee discriminator, allocated — never accepted from the
+         * client.
+         *
+         * Inside the transaction, because that is what stops two concurrent
+         * creates from reading the same maximum. The unique index on
+         * `(orgId, employeeCode)` remains the actual guarantee; a lost race
+         * surfaces as the 409 `translateUniqueViolation` produces, and retrying
+         * allocates the next code.
+         *
+         * Null on the USER surface, and that is the whole distinction: an
+         * administrator has no code, and its absence is what keeps them out of
+         * every employee query.
+         */
+        const employeeCode =
+          surface === 'EMPLOYEE'
+            ? await allocateSequentialCode(tx.user, {
+                orgId: actor.orgId,
+                column: 'employeeCode',
+                prefix: 'EMP',
+                padding: 3,
+              })
+            : null;
 
         const row = await tx.user.create({
           data: {
@@ -947,11 +970,20 @@ export class UserService {
     }
   }
 
-  /** Scenario 3 — a duplicate identifier is refused before the write. */
+  /**
+   * Scenario 3 — a duplicate identifier is refused before the write.
+   *
+   * Employee ID is deliberately not among the identifiers checked here. It is
+   * no longer client-supplied, so there is nothing for an administrator to
+   * correct and no message worth showing them: a collision can only be a lost
+   * allocation race, which `translateUniqueViolation` turns into a retryable
+   * 409. Checking a code that has not been allocated yet would also mean
+   * checking it before the transaction that mints it, which is precisely the
+   * read that would go stale.
+   */
   private async assertIdentifiersFree(
     actor: AuthContext,
     dto: CreateUserDto,
-    employeeCode: string | null,
     meta: RequestMeta,
     surface: UserSurface,
   ): Promise<void> {
@@ -961,20 +993,14 @@ export class UserService {
         OR: [
           { mobile: dto.mobile },
           ...(dto.email ? [{ email: dto.email }] : []),
-          ...(employeeCode ? [{ employeeCode }] : []),
         ],
       },
-      select: { mobile: true, email: true, employeeCode: true },
+      select: { mobile: true, email: true },
     });
 
     if (!clash) return;
 
-    const field =
-      clash.mobile === dto.mobile
-        ? 'Mobile Number'
-        : clash.employeeCode === employeeCode && employeeCode !== null
-          ? 'Employee ID'
-          : 'Email';
+    const field = clash.mobile === dto.mobile ? 'Mobile Number' : 'Email';
 
     await this.recordRejection(
       actor,
@@ -1231,14 +1257,40 @@ export class UserService {
    * between that check and the insert. Without it the unique-constraint violation
    * reaches `AllExceptionsFilter` unrecognized and is rendered as a 503 about the
    * authentication service.
+   *
+   * The violated column decides the message. Blaming the mobile unconditionally
+   * was safe while it was the only allocated-late identifier, but an employee
+   * code is now minted inside the transaction and can lose its own race — and
+   * telling an administrator their mobile number is taken, when it is not and
+   * retrying the identical form would succeed, sends them to change the one
+   * field that was never the problem. The two also differ in what the caller
+   * should do: a real mobile clash needs a different number, a lost code
+   * allocation just needs a retry.
    */
   private translateUniqueViolation(error: unknown, mobile: string): unknown {
-    const prismaError = error as { code?: string };
-    if (prismaError?.code === 'P2002') {
+    const prismaError = error as { code?: string; meta?: unknown };
+    if (prismaError?.code !== 'P2002') return error;
+
+    const target = (prismaError.meta as { target?: unknown } | undefined)
+      ?.target;
+    const fields = Array.isArray(target)
+      ? target.map(String)
+      : typeof target === 'string'
+        ? [target]
+        : [];
+
+    if (fields.some((field) => field.includes('employeeCode'))) {
       return new ConflictException(
-        `This Mobile Number is already in use: ${mobile}`,
+        'Could not allocate an Employee ID. Please try again.',
       );
     }
-    return error;
+
+    if (fields.some((field) => field.includes('email'))) {
+      return new ConflictException('This Email is already in use');
+    }
+
+    return new ConflictException(
+      `This Mobile Number is already in use: ${mobile}`,
+    );
   }
 }

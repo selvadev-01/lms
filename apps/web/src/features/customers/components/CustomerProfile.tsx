@@ -51,7 +51,7 @@ function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <Button size="sm" variant={variant} disabled={pending}>
+    <Button type="submit" size="sm" variant={variant} disabled={pending}>
       {pending ? "Working…" : label}
     </Button>
   );
@@ -62,6 +62,7 @@ type Tab = "details" | "kyc" | "guarantors" | "loans";
 export default function CustomerProfile({
   profile,
   canUpdate = false,
+  canVerifyMobile = false,
   canActivate = false,
   canDelete = false,
   canConvert = false,
@@ -80,6 +81,11 @@ export default function CustomerProfile({
 }: {
   profile: CustomerProfileResponse;
   canUpdate?: boolean;
+  /**
+   * Separate from `canUpdate`: a field agent verifies a customer's number
+   * without being able to edit the customer afterwards.
+   */
+  canVerifyMobile?: boolean;
   canActivate?: boolean;
   canDelete?: boolean;
   canConvert?: boolean;
@@ -250,16 +256,16 @@ export default function CustomerProfile({
 
       {/*
         Scenario 14 — a LOCAL customer's only identity check. Shown until the
-        number is verified, because until then the customer cannot be activated.
+        number is verified, because verifying it is what activates them.
       */}
-      {isLocal && !customer.mobileVerified && canUpdate && (
+      {isLocal && !customer.mobileVerified && canVerifyMobile && (
         <div className="border-warning-300 bg-warning-50 dark:border-warning-500/30 dark:bg-warning-500/10 rounded-2xl border p-4">
           <p className="text-sm font-medium text-gray-800 dark:text-white/90">
             Mobile number not verified
           </p>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            This Local customer cannot be activated until the mobile number is
-            verified.
+            Send a code to this customer&rsquo;s mobile and enter it below.
+            Verifying the number activates this Local customer.
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <form action={otpFormAction}>

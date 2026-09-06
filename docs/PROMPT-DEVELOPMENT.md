@@ -66,7 +66,7 @@ apps/api/          NestJS 11        — REST API. Currently a bare scaffold:
                                       only app.module/controller/service exist.
                                       No database layer yet.
 apps/web/          Next.js 16       — App Router, React 19, Tailwind v4.
-                                      TailAdmin-derived UI shell, feature-first.
+                                      LMS admin UI shell, feature-first.
 packages/types/       @lms/types       shared TypeScript types / DTO contracts
 packages/validation/  @lms/validation  shared zod schemas (used by BOTH api + web)
 packages/constants/   @lms/constants   enums, statuses, permission keys

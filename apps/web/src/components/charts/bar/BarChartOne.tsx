@@ -11,7 +11,9 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 
 export default function BarChartOne() {
   const options: ApexOptions = {
-    colors: ["#465fff"],
+    // ApexCharts takes colours as JS values, not CSS, so this cannot be a
+    // token. Keep it in step with `--color-brand-500` in packages/design-tokens.
+    colors: ["#0f8a80"],
     chart: {
       fontFamily: "Outfit, sans-serif",
       type: "bar",

@@ -16,7 +16,9 @@ export default function LineChartOne() {
       position: "top",
       horizontalAlign: "left",
     },
-    colors: ["#465FFF", "#9CB9FF"], // Define line colors
+    // brand-500 and brand-300. ApexCharts takes JS values, not CSS tokens, so
+    // keep these in step with the ramp in packages/design-tokens by hand.
+    colors: ["#0f8a80", "#5cc3b8"],
     chart: {
       fontFamily: "Outfit, sans-serif",
       height: 310,

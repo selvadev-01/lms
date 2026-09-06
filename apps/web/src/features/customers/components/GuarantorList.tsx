@@ -69,7 +69,7 @@ function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <Button size="sm" variant={variant} disabled={pending}>
+    <Button type="submit" size="sm" variant={variant} disabled={pending}>
       {pending ? "Working…" : label}
     </Button>
   );
@@ -192,7 +192,12 @@ export default function GuarantorList({
           Guarantors
         </h3>
         {canManage && !adding && (
-          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setAdding(true)}
+          >
             Add Guarantor
           </Button>
         )}
@@ -322,6 +327,7 @@ export default function GuarantorList({
 
                     {canManage && !inactive && (
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
                         onClick={() =>
@@ -343,7 +349,7 @@ export default function GuarantorList({
                     */}
                     {canDeactivate && canView && (
                       <Link href={`/guarantors/${guarantor.guarantorId}`}>
-                        <Button size="sm" variant="outline">
+                        <Button type="button" size="sm" variant="outline">
                           {inactive ? "Reactivate" : "Deactivate"}
                         </Button>
                       </Link>
@@ -398,6 +404,7 @@ export default function GuarantorList({
 
                     <div className="flex justify-end gap-3">
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
                         onClick={() => setEditing(null)}
@@ -443,6 +450,7 @@ export default function GuarantorList({
 
           <div className="flex justify-end gap-3">
             <Button
+              type="button"
               size="sm"
               variant="outline"
               onClick={() => setAdding(false)}

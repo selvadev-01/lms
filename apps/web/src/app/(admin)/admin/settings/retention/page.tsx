@@ -47,7 +47,10 @@ export default async function RetentionPoliciesPage() {
         <RetentionPolicyList
           policies={policies.status === "ok" ? policies.policies : []}
           loadError={policies.status !== "ok"}
-          canManage={hasPermissions(user, PERMISSIONS.RETENTION_POLICIES_MANAGE)}
+          canManage={hasPermissions(
+            user,
+            PERMISSIONS.RETENTION_POLICIES_MANAGE,
+          )}
         />
       </div>
     </div>

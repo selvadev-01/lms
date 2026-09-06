@@ -65,12 +65,7 @@ export default function ReportFilters({
           >
             To
           </label>
-          <DateField
-            id="report-to"
-            name="toDate"
-            defaultValue={toDate}
-            bare
-          />
+          <DateField id="report-to" name="toDate" defaultValue={toDate} bare />
         </div>
 
         <div className="min-w-[14rem] flex-1">

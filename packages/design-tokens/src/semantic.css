@@ -1,0 +1,195 @@
+/* Semantic design tokens — the "Calm Institutional" layer.
+
+   WHY THIS FILE EXISTS
+   Dark mode used to be written per element (`dark:bg-white/[0.03]` on ~90
+   pages). That makes a re-theme an edit of every component. Here, a colour is
+   named for its *role* (`surface`, `line`, `ink`) rather than its value, and
+   dark mode becomes a value swap in one place.
+
+   HOW TO USE IT
+   Write `bg-surface text-ink border-line`. Do NOT write `dark:` variants —
+   the token already resolves correctly in both themes. An ESLint rule enforces
+   this in `packages/ui` and in converted feature directories.
+
+   `@theme inline` IS LOAD-BEARING.
+   Plain `@theme` would resolve `var(--sem-*)` once, at build time, and bake the
+   light value into every utility — dark mode would then silently do nothing.
+   `inline` keeps the `var()` reference in the generated CSS so the `.dark`
+   block below can actually override it. Do not drop the keyword.
+
+   COEXISTENCE WITH THE OLD RAMPS
+   `theme.css` still owns the legacy `brand-*` / `gray-*` scales, byte for
+   byte, because ~70 unconverted pages depend on them, as does the
+   `menu-*` utility block and the `!important` ApexCharts/flatpickr overrides in
+   the web app's globals.css (which now reference the ramp via var()). This file is
+   purely additive: every name below is new, so nothing already written can
+   change appearance.
+
+   TODO(after the last page converts): re-point `--color-brand-*` at these
+   semantic values and delete the old ramps from theme.css. Not before. */
+
+@theme inline {
+  /* Surfaces, from furthest back to furthest forward. */
+  --color-canvas: var(--sem-canvas);
+  --color-surface: var(--sem-surface);
+  --color-surface-raised: var(--sem-surface-raised);
+  --color-surface-sunken: var(--sem-surface-sunken);
+
+  /* Hairline rules. `line` is the default; `line-strong` is for a border that
+     has to carry weight on its own, e.g. a table header underline. */
+  --color-line: var(--sem-line);
+  --color-line-strong: var(--sem-line-strong);
+
+  /* Text. `ink` is body copy; `muted` is secondary/labels; `subtle` is
+     placeholder-weight and must never carry meaning on its own. */
+  --color-ink: var(--sem-ink);
+  --color-ink-muted: var(--sem-ink-muted);
+  --color-ink-subtle: var(--sem-ink-subtle);
+  --color-ink-inverted: var(--sem-ink-inverted);
+
+  /* THE accent. Exactly one. Status colours below are not accents and must
+     never be used for interactive affordances — a green button reads as
+     "success", not "submit". */
+  --color-accent: var(--sem-accent);
+  --color-accent-hover: var(--sem-accent-hover);
+  --color-accent-soft: var(--sem-accent-soft);
+  --color-accent-ink: var(--sem-accent-ink);
+
+  /* Status. Each has a solid, a tinted background, and a text colour that is
+     legible on that tint. */
+  --color-positive: var(--sem-positive);
+  --color-positive-soft: var(--sem-positive-soft);
+  --color-positive-ink: var(--sem-positive-ink);
+
+  --color-caution: var(--sem-caution);
+  --color-caution-soft: var(--sem-caution-soft);
+  --color-caution-ink: var(--sem-caution-ink);
+
+  --color-critical: var(--sem-critical);
+  --color-critical-soft: var(--sem-critical-soft);
+  --color-critical-ink: var(--sem-critical-ink);
+
+  --color-info: var(--sem-info);
+  --color-info-soft: var(--sem-info-soft);
+  --color-info-ink: var(--sem-info-ink);
+
+  --color-focus: var(--sem-focus);
+
+  /* Geometry. Calmer than the inherited rounded-2xl (16px): panels read as
+     documents, not cards. */
+  --radius-panel: 10px;
+  --radius-control: 6px;
+
+  /* Near-flat. Depth comes from the hairline, not from a shadow. */
+  --shadow-panel: 0 1px 2px 0 rgb(15 23 41 / 0.04);
+  --shadow-raised:
+    0 4px 12px -2px rgb(15 23 41 / 0.08), 0 2px 4px -2px rgb(15 23 41 / 0.04);
+}
+
+/* Light is the default and lives on bare `:root`, so a value always exists
+   even before the theme script runs. */
+:root {
+  --sem-canvas: #f7f8fa;
+  --sem-surface: #ffffff;
+  --sem-surface-raised: #ffffff;
+  --sem-surface-sunken: #f2f4f7;
+
+  --sem-line: #e3e6ec;
+  --sem-line-strong: #cdd2db;
+
+  --sem-ink: #0f1729;
+  --sem-ink-muted: #4a5568;
+  --sem-ink-subtle: #7b8798;
+  --sem-ink-inverted: #ffffff;
+
+  /* Matches `--color-brand-500` in theme.css. The two must agree: converted
+     screens use `accent`, unconverted ones still use `brand-500`, and an app
+     showing two different "primary" colours reads as a bug. */
+  --sem-accent: #0f8a80;
+  --sem-accent-hover: #0b6f68;
+  --sem-accent-soft: #e6f6f4;
+  --sem-accent-ink: #ffffff;
+
+  --sem-positive: #047857;
+  --sem-positive-soft: #ecfdf5;
+  --sem-positive-ink: #065f46;
+
+  --sem-caution: #b45309;
+  --sem-caution-soft: #fffbeb;
+  --sem-caution-ink: #92400e;
+
+  --sem-critical: #b42318;
+  --sem-critical-soft: #fef3f2;
+  --sem-critical-ink: #912018;
+
+  --sem-info: #1d4ed8;
+  --sem-info-soft: #eff6ff;
+  --sem-info-ink: #1e40af;
+
+  --sem-focus: #1d4ed8;
+}
+
+/* `.dark` is on <html> (see ThemeContext + the anti-FOUC script in the web
+   app's root layout), so this also reaches Radix content portalled into
+   <body>. Overriding only the `--sem-*` values means no utility is redefined
+   and no specificity war is possible. */
+.dark {
+  --sem-canvas: #0b1020;
+  --sem-surface: #111827;
+  --sem-surface-raised: #161f31;
+  --sem-surface-sunken: #0d1424;
+
+  --sem-line: #212c42;
+  --sem-line-strong: #2f3d57;
+
+  --sem-ink: #e8edf6;
+  --sem-ink-muted: #9aa7bd;
+  --sem-ink-subtle: #6b7a91;
+  --sem-ink-inverted: #0b1020;
+
+  /* Lifted well above the light-mode teal: #0f8a80 on a #0b1020 ground fails
+     contrast badly, so dark mode takes a brighter stop of the same hue. */
+  --sem-accent: #35bdb0;
+  --sem-accent-hover: #5cd3c7;
+  --sem-accent-soft: #0d2b2a;
+  --sem-accent-ink: #03211f;
+
+  --sem-positive: #34d399;
+  --sem-positive-soft: #08251d;
+  --sem-positive-ink: #6ee7b7;
+
+  --sem-caution: #fbbf24;
+  --sem-caution-soft: #2a1e06;
+  --sem-caution-ink: #fcd34d;
+
+  --sem-critical: #f87171;
+  --sem-critical-soft: #2c1214;
+  --sem-critical-ink: #fca5a5;
+
+  --sem-info: #60a5fa;
+  --sem-info-soft: #101f38;
+  --sem-info-ink: #93c5fd;
+
+  --sem-focus: #7ba4f3;
+}
+
+/* Money, dates and IDs must align in a column. Without tabular figures, digit
+   widths differ and a column of amounts visibly ripples. */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Field staff run this on cheap Android hardware, and Radix animates by
+   default. Honour the OS preference rather than shipping motion nobody asked
+   for. `!important` because it must beat component-level transition classes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

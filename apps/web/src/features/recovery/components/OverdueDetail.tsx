@@ -3,10 +3,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@lms/ui";
 import Link from "next/link";
 
 import { formatDate, formatPaise } from "@/lib/format";
-import {
-  DelinquencyBucketBadge,
-  NpaStatusBadge,
-} from "./RecoveryBadges";
+import { DelinquencyBucketBadge, NpaStatusBadge } from "./RecoveryBadges";
 
 /**
  * One loan's overdue position.
@@ -49,10 +46,7 @@ export default function OverdueDetail({
             label="Oldest unpaid due date"
             value={formatDate(overdue.oldestDueDate)}
           />
-          <Figure
-            label="Days past due"
-            value={String(overdue.daysPastDue)}
-          />
+          <Figure label="Days past due" value={String(overdue.daysPastDue)} />
           <Figure
             label="Total overdue"
             value={formatPaise(overdue.totalOverduePaise)}

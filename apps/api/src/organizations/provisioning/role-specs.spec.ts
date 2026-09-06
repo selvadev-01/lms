@@ -138,8 +138,26 @@ describe('withheld grants that make a denial provable', () => {
     ['field.collections.verify', 'self-verification'],
     ['recovery.cases.assign', 'Scenario 42'],
     ['collections.reverse', 'an agent erasing their own receipt'],
+    // Q-CUST-23. The role registers a customer but decides nothing about one:
+    // editing the identity it collected against, verifying its own
+    // registration, or changing status are all branch work.
+    ['customers.update', 'altering an identity after collecting against it'],
+    ['customers.kyc.submit', 'verifying its own registration'],
+    ['customers.kyc.approve', 'verifying its own registration'],
+    ['customers.activate', 'status is not a field call'],
+    ['customers.convert', 'status is not a field call'],
+    ['customers.delete', 'status is not a field call'],
   ])('withholds %s from a Field Employee (%s)', (code) => {
     expect(FIELD_EMPLOYEE_PERMISSION_CODES).not.toContain(code);
+  });
+
+  it('lets a Field Employee register a customer but not maintain one', () => {
+    // Q-CUST-23. Onboarding at the doorstep is field work; every act that
+    // decides something about the customer afterwards is withheld above.
+    expect(FIELD_EMPLOYEE_PERMISSION_CODES).toContain('customers.create');
+    // The create form's gender dropdown resolves through master data, which is
+    // why registering needs no grant beyond `customers.create`.
+    expect(FIELD_EMPLOYEE_PERMISSION_CODES).toContain('master_data.view');
   });
 
   it('gives a Field Employee the check-in a Branch Admin is refused', () => {

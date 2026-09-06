@@ -61,10 +61,18 @@ export default function MaintenanceJobTable({
   return (
     <div className="space-y-4">
       {retryState.success ? (
-        <Alert variant="success" title="Retry started" message={retryState.success} />
+        <Alert
+          variant="success"
+          title="Retry started"
+          message={retryState.success}
+        />
       ) : null}
       {retryState.message ? (
-        <Alert variant="error" title="Not retried" message={retryState.message} />
+        <Alert
+          variant="error"
+          title="Not retried"
+          message={retryState.message}
+        />
       ) : null}
 
       {jobs.length === 0 ? (
@@ -99,7 +107,7 @@ export default function MaintenanceJobTable({
                   </div>
 
                   {job.failureSummary ? (
-                    <div className="mt-1 text-xs text-error-500">
+                    <div className="text-error-500 mt-1 text-xs">
                       {job.failureSummary}
                     </div>
                   ) : job.isFailureRedacted && job.status === "FAILED" ? (
@@ -114,7 +122,7 @@ export default function MaintenanceJobTable({
                     <input type="hidden" name="jobRunId" value={job.jobRunId} />
                     <button
                       type="submit"
-                      className="text-xs font-medium text-brand-500 hover:underline"
+                      className="text-brand-500 text-xs font-medium hover:underline"
                     >
                       Retry
                     </button>
@@ -138,9 +146,7 @@ export default function MaintenanceJobTable({
                             {step.failureSummary}
                           </span>
                         ) : null}
-                        <Badge
-                          color={STATUS_COLOR[step.status] ?? "light"}
-                        >
+                        <Badge color={STATUS_COLOR[step.status] ?? "light"}>
                           {step.status}
                         </Badge>
                       </span>

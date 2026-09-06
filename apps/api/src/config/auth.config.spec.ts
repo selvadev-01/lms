@@ -55,7 +55,7 @@ describe('authConfig', () => {
 
   function load(env: Record<string, string | undefined>) {
     process.env = { ...ORIGINAL, ...env };
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const factory = require('./auth.config').default as () => Record<
       string,
       unknown

@@ -145,6 +145,15 @@ export const PERMISSIONS = {
   CUSTOMERS_VIEW: "customers.view",
   CUSTOMERS_CREATE: "customers.create",
   CUSTOMERS_UPDATE: "customers.update",
+  /**
+   * Sending and confirming a LOCAL customer's mobile code.
+   *
+   * Its own code rather than `customers.update`, which used to gate it: a field
+   * agent may register a customer and verify their number without being able to
+   * edit one afterwards. Verifying now also activates a PENDING LOCAL customer,
+   * so this carries the weight `customers.activate` would otherwise.
+   */
+  CUSTOMERS_MOBILE_VERIFY: "customers.mobile.verify",
   /** Physically delete a customer — refused when anything references them. */
   CUSTOMERS_DELETE: "customers.delete",
   /** Toggle customer status in either direction. */

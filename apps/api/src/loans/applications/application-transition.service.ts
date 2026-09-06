@@ -42,6 +42,10 @@ export type TransitionTx = Pick<
   | 'creditAssessment'
   | 'sanctionLetter'
   | 'auditLog'
+  // Read-only, by the completeness check: whether the application's loan type
+  // requires a COLLATERAL document is a `LOAN_TYPE` master-data flag now rather
+  // than a constant in code.
+  | 'masterDataValue'
   // Module 09. One disbursal writes across all of these atomically.
   | 'loan'
   | 'disbursement'

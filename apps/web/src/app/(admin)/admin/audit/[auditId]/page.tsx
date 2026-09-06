@@ -47,7 +47,7 @@ export default async function AuditEventPage({
     return (
       <div>
         <PageBreadcrumb pageTitle="Audit Event" />
-        <p className="text-sm text-error-500">
+        <p className="text-error-500 text-sm">
           We could not load this audit event. Refresh to try again.
         </p>
       </div>
@@ -63,11 +63,11 @@ export default async function AuditEventPage({
       <div className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
         <dl className="grid gap-4 sm:grid-cols-2">
           <div>
-            <dt className="text-xs uppercase text-gray-500">Action</dt>
+            <dt className="text-xs text-gray-500 uppercase">Action</dt>
             <dd className="font-mono text-sm">{event.action}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-gray-500">Occurred</dt>
+            <dt className="text-xs text-gray-500 uppercase">Occurred</dt>
             <dd className="text-sm">
               {new Date(event.occurredAt).toLocaleString("en-IN", {
                 timeZone: "Asia/Kolkata",
@@ -75,13 +75,13 @@ export default async function AuditEventPage({
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-gray-500">Actor</dt>
+            <dt className="text-xs text-gray-500 uppercase">Actor</dt>
             <dd className="text-sm">
               {event.actorName ?? <Badge variant="light">System</Badge>}
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-gray-500">Target</dt>
+            <dt className="text-xs text-gray-500 uppercase">Target</dt>
             <dd className="text-sm">
               {event.entityType}
               {event.entityId ? ` · ${event.entityId}` : ""}
@@ -97,13 +97,13 @@ export default async function AuditEventPage({
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <h3 className="mb-1 text-xs uppercase text-gray-500">Before</h3>
+              <h3 className="mb-1 text-xs text-gray-500 uppercase">Before</h3>
               <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 text-xs dark:bg-gray-900">
                 {JSON.stringify(event.oldData ?? null, null, 2)}
               </pre>
             </div>
             <div>
-              <h3 className="mb-1 text-xs uppercase text-gray-500">After</h3>
+              <h3 className="mb-1 text-xs text-gray-500 uppercase">After</h3>
               <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 text-xs dark:bg-gray-900">
                 {JSON.stringify(event.newData ?? null, null, 2)}
               </pre>

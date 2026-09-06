@@ -16,7 +16,7 @@ import {
 function SaveButton({ mode }: { mode: "create" | "edit" }) {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" disabled={pending}>
+    <Button type="submit" size="sm" disabled={pending}>
       {pending
         ? mode === "create"
           ? "Creating…"

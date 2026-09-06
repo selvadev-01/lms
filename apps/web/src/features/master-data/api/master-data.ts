@@ -23,6 +23,14 @@ export interface MasterDataValueDetail extends SelectOption {
   displayOrder: number;
   status: "ACTIVE" | "INACTIVE";
   isSystem: boolean;
+  /**
+   * LOAN_TYPE only; null for every other category.
+   *
+   * Whether an application of this loan type must carry a COLLATERAL document
+   * before it can be submitted. Null is "the question does not apply here",
+   * which is why it is not collapsed to false.
+   */
+  requiresCollateral: boolean | null;
   version: string;
 }
 

@@ -1254,6 +1254,7 @@ async function main(): Promise<void> {
           displayOrder: next,
           status: 'ACTIVE',
           isSystem: true,
+          requiresCollateral: spec.requiresCollateral ?? null,
         },
         create: {
           orgId: org.orgId,
@@ -1263,6 +1264,9 @@ async function main(): Promise<void> {
           displayOrder: next,
           status: 'ACTIVE',
           isSystem: true,
+          // LOAN_TYPE rows only. Re-asserted on update alongside the rest, so a
+          // re-seed repairs a flag an e2e run flipped.
+          requiresCollateral: spec.requiresCollateral ?? null,
         },
       });
     }

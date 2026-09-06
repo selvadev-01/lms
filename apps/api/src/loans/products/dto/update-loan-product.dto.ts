@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
 
 import { trim } from '../../../common/transforms/trim';
 
@@ -18,10 +18,13 @@ export class UpdateLoanProductDto {
   @MaxLength(150)
   name!: string;
 
-  @IsIn(['PERSONAL', 'BUSINESS', 'GOLD', 'VEHICLE'], {
-    message: 'Loan Type is required',
-  })
-  loanType!: 'PERSONAL' | 'BUSINESS' | 'GOLD' | 'VEHICLE';
+  /** A `LOAN_TYPE` master-data code — see `CreateLoanProductDto.loanType`. */
+  @IsString()
+  @Transform(trim)
+  @IsNotEmpty({ message: 'Loan Type is required' })
+  @MaxLength(50)
+  @Matches(/^[A-Z][A-Z0-9_]*$/, { message: 'Loan Type is required' })
+  loanType!: string;
 
   /**
    * The record's ISO `updatedAt`, as the caller last saw it.

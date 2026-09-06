@@ -113,6 +113,7 @@ export const BRANCH_ADMIN_PERMISSION_CODES: readonly string[] = [
   'customers.view',
   'customers.create',
   'customers.update',
+  'customers.mobile.verify',
   'customers.activate',
   'customers.kyc.view',
   'customers.kyc.submit',
@@ -448,18 +449,47 @@ export const BRANCH_ADMIN_PERMISSION_CODES: readonly string[] = [
  * GPS Scenarios 3 and 30 have an authenticated admin who is denied. Note the
  * admins hold `field.checkin.view` but NOT `field.checkin` — being able to
  * review someone's check-in history is not permission to create one.
- * `customers.view` and nothing else from Module 04 (Q-CUST-23): a field agent
- * must be able to identify the customer they are collecting from, but creating
- * or editing one is a branch-office action. Scenario 23 uses this role for the
- * unauthorized-edit refusal.
+ * From Module 04 it holds `customers.view`, `customers.create` and
+ * `customers.mobile.verify` (Q-CUST-23). Onboarding at the doorstep is field
+ * work — an agent who cannot register the customer in front of them has to
+ * leave and come back — so registering one and verifying their number are both
+ * granted. A verified LOCAL customer is activated by that verification, so the
+ * agent completes the onboarding end to end.
+ *
+ * Every act that decides something *else* about the customer is withheld:
+ *
+ *  * `customers.update` — an agent who could edit a customer after the fact
+ *    could alter the identity they collected against. This is why verification
+ *    has its own code: it used to be gated on `customers.update`, and reusing
+ *    that here would have granted the edit as well.
+ *  * `customers.kyc.submit` and `.approve` — a KYC customer's identity rests on
+ *    documents, and an agent who could both supply and approve them would be
+ *    the whole control. KYC review is branch work, on the same reasoning as
+ *    `field.collections.verify` below.
+ *  * `customers.activate`, `.convert`, `.delete` — the automatic activation
+ *    above follows from evidence the agent cannot forge (a code sent to the
+ *    customer's own handset). Deactivating, reactivating, or activating a KYC
+ *    customer are judgements, and remain branch work.
+ *
+ * The grant is safe against cross-branch creation without a further check:
+ * `resolveCreateBranch` returns the actor's own branch and never reads
+ * `dto.branchId` for a branch-confined caller, so an agent physically cannot
+ * create outside their branch (Scenario 31).
+ *
+ * Note this also unlocks the loan wizard's "create customer record" path, which
+ * reuses `customers.create` rather than minting a second code (Q-CUST-35).
  */
 export const FIELD_EMPLOYEE_PERMISSION_CODES: readonly string[] = [
   'dashboard.view',
   'collections.record',
   'field.checkin',
   'customers.view',
+  'customers.create',
+  'customers.mobile.verify',
   // Needed to render a customer's stored gender or a guarantor's relationship
-  // as a label rather than a raw code on a field screen.
+  // as a label rather than a raw code on a field screen. Also what makes the
+  // create form's gender dropdown resolve, which is why registering a customer
+  // needs no grant beyond `customers.create`.
   'master_data.view',
   // Module 11. Collecting in the field is this role's entire purpose, so it
   // holds the money-moving act and the offline path that a Branch Admin does

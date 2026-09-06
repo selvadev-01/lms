@@ -98,7 +98,9 @@ export default function LoanApplicationList({
             aria-label="Search loan applications"
             className="shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30"
           />
-          <Button size="sm">Search</Button>
+          <Button type="submit" size="sm">
+            Search
+          </Button>
         </form>
 
         <div className="flex items-center gap-2">
@@ -124,7 +126,9 @@ export default function LoanApplicationList({
 
           {canCreate && (
             <Link href="/loans/applications/new">
-              <Button size="sm">New Application</Button>
+              <Button type="button" size="sm">
+                New Application
+              </Button>
             </Link>
           )}
         </div>

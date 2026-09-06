@@ -1,6 +1,11 @@
 import { randomInt } from 'node:crypto';
 
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import {
@@ -34,7 +39,7 @@ import { VerifyMobileOtpDto } from './dto/verify-mobile-otp.dto';
  * their own phone and says it aloud. There is no public endpoint here.
  */
 @Injectable()
-export class CustomerMobileService {
+export class CustomerMobileService implements OnModuleInit {
   private readonly logger = new Logger(CustomerMobileService.name);
 
   constructor(
@@ -45,6 +50,30 @@ export class CustomerMobileService {
     private readonly sms: SmsService,
     private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Refuses to start when the development OTP is configured in production.
+   *
+   * Modelled on `ConsoleSmsProvider.onModuleInit`, and for the same reason: a
+   * deployment that accepts a constant code has no mobile verification, and a
+   * LOCAL customer's verified mobile is the only identity evidence the system
+   * ever collects about them. Failing at boot makes that misconfiguration
+   * impossible to miss; failing per-customer would make it invisible.
+   */
+  onModuleInit(): void {
+    if (this.devCode() !== null && process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'CUSTOMER_OTP_DEV_CODE must not be set in production: it accepts a ' +
+          'constant verification code for every customer. Unset it.',
+      );
+    }
+
+    if (this.devCode() !== null) {
+      this.logger.warn(
+        'CUSTOMER_OTP_DEV_CODE is set — a fixed customer verification code is accepted.',
+      );
+    }
+  }
 
   /**
    * Mints and sends a verification code.
@@ -135,11 +164,28 @@ export class CustomerMobileService {
   }
 
   /**
-   * Verifies the code and stamps `mobileVerifiedAt` (Scenario 14).
+   * Verifies the code, stamps `mobileVerifiedAt`, and activates (Scenario 14).
    *
    * Stamping the customer is what unblocks activation; the verification row is
    * the evidence. Both land in one transaction, so a customer can never be
    * marked verified against a code that was not actually consumed.
+   *
+   * A PENDING LOCAL customer is activated in that same transaction rather than
+   * left for a separate `setStatus` call. Rule 12 made a verified mobile the
+   * precondition for activating a LOCAL customer; it is now the trigger, since
+   * for this type there is nothing else left to check — the OTP *is* the whole
+   * of their identity evidence (Q-CUST-27), so a verified customer who is still
+   * PENDING is waiting on a decision nobody has to make.
+   *
+   * Deliberately not gated on `customers.activate`: the activation follows from
+   * the verification rather than from the caller's authority, which is what lets
+   * a field agent complete an onboarding at the doorstep. The permission still
+   * governs the explicit act — deactivating, or activating a KYC customer —
+   * and `CUSTOMER_ACTIVATED` is audited here exactly as `setStatus` records it,
+   * so the change is not invisible just because it was automatic.
+   *
+   * Only PENDING is promoted. An INACTIVE customer was deactivated by someone
+   * on purpose, and re-verifying a mobile must not undo that decision.
    */
   async verifyOtp(
     actor: AuthContext,
@@ -191,7 +237,14 @@ export class CustomerMobileService {
       );
     }
 
-    const matches = await this.passwords.verify(active.otpHash, dto.otp);
+    // The development code is checked alongside the real one, never instead of
+    // it: every guard above — expiry, attempts, the mobile-changed check — has
+    // already run, so the shortcut skips only the comparison, not the flow.
+    const dev = this.devCode();
+    const matches =
+      dev !== null && dto.otp === dev
+        ? true
+        : await this.passwords.verify(active.otpHash, dto.otp);
 
     if (!matches) {
       await this.prisma.customerMobileVerification.update({
@@ -208,6 +261,13 @@ export class CustomerMobileService {
       throw new ConflictException('That verification code is not correct');
     }
 
+    // A LOCAL customer has no second precondition, so verifying completes them.
+    // Guarded on the type as well as the status because `customerType` can be
+    // converted: a KYC customer still needs an approved KYC record (Rule 6),
+    // and must never be activated by an OTP.
+    const activates =
+      customer.customerType === 'LOCAL' && customer.status === 'PENDING';
+
     await this.prisma.$transaction(async (tx) => {
       await tx.customerMobileVerification.update({
         where: {
@@ -221,7 +281,10 @@ export class CustomerMobileService {
 
       await tx.customer.update({
         where: { orgId_customerId: { orgId: actor.orgId, customerId } },
-        data: { mobileVerifiedAt: new Date() },
+        data: {
+          mobileVerifiedAt: new Date(),
+          ...(activates ? { status: 'ACTIVE' as const } : {}),
+        },
       });
 
       await this.audit.record(
@@ -239,6 +302,28 @@ export class CustomerMobileService {
         },
         tx,
       );
+
+      if (activates) {
+        // A second entry rather than a richer first one: an auditor asking when
+        // a customer became active searches CUSTOMER_ACTIVATED, and would not
+        // find a customer whose activation was folded into a verification.
+        await this.audit.record(
+          {
+            orgId: actor.orgId,
+            action: AuditAction.CUSTOMER_ACTIVATED,
+            entityType: 'CUSTOMER',
+            entityId: customerId,
+            actorUserId: actor.userId,
+            requestId: meta.requestId,
+            ipAddress: meta.ipAddress,
+            userAgent: meta.userAgent,
+            metadata: { reason: 'Mobile verified' },
+            oldData: { status: customer.status },
+            newData: { status: 'ACTIVE' },
+          },
+          tx,
+        );
+      }
     });
   }
 
@@ -257,6 +342,18 @@ export class CustomerMobileService {
 
   private num(key: string, fallback: number): number {
     return this.config.get<number>(`customers.${key}`) ?? fallback;
+  }
+
+  /**
+   * The configured development code, or null when the shortcut is off.
+   *
+   * An empty string reads as "not set" rather than as a code that matches an
+   * empty submission — the DTO rejects an empty OTP anyway, but a blank
+   * environment variable is far likelier to be an accident than an intent.
+   */
+  private devCode(): string | null {
+    const value = this.config.get<string | null>('customers.otpDevCode');
+    return value ? value : null;
   }
 
   private async recordFailure(

@@ -133,6 +133,11 @@ export const MASTER_DATA_CATEGORIES = [
   "RELATIONSHIP",
   "LOAN_PURPOSE",
   "DOCUMENT_TYPE",
+  // A loan product's type. Admin-managed rather than a compiled-in enum,
+  // because a tenant lends against things this codebase has never heard of.
+  // Its rows carry `requiresCollateral`, which decides whether an application
+  // of that type must produce a COLLATERAL document before it can be submitted.
+  "LOAN_TYPE",
 ] as const;
 
 export type MasterDataCategory = (typeof MASTER_DATA_CATEGORIES)[number];

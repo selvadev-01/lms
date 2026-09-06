@@ -43,11 +43,16 @@ export const dynamic = "force-dynamic";
 export default async function NewLoanApplicationPage() {
   const user = await requirePermissions(PERMISSIONS.LOANS_APPLICATIONS_CREATE);
 
-  const [customerResult, schemeResult, purposeOptions] = await Promise.all([
-    fetchCustomers({ status: "ACTIVE" }),
-    fetchLoanSchemes({ selectable: true }),
-    fetchMasterDataOptions("LOAN_PURPOSE"),
-  ]);
+  const [customerResult, schemeResult, purposeOptions, loanTypeOptions] =
+    await Promise.all([
+      fetchCustomers({ status: "ACTIVE" }),
+      fetchLoanSchemes({ selectable: true }),
+      fetchMasterDataOptions("LOAN_PURPOSE"),
+      // Loan types are admin-managed per tenant, so the labels come from the
+      // API rather than the compiled-in registry — an organization that added
+      // its own type would otherwise find it unofferable here.
+      fetchMasterDataOptions("LOAN_TYPE"),
+    ]);
 
   const schemes = schemeResult.status === "ok" ? schemeResult.schemes : [];
 
@@ -57,7 +62,12 @@ export default async function NewLoanApplicationPage() {
 
   const schemeTerms: Record<
     string,
-    Array<{ frequency: string; durationCount: number }>
+    Array<{
+      frequency: string;
+      durationCount: number;
+      minDurationCount: number | null;
+      maxDurationCount: number | null;
+    }>
   > = {};
   const schemeTypes: Record<string, string> = {};
 
@@ -70,6 +80,10 @@ export default async function NewLoanApplicationPage() {
       .map((duration) => ({
         frequency: duration.frequency,
         durationCount: duration.durationCount,
+        // Carried so step 3 knows whether this term is a fixed choice or a
+        // range the borrower states — a daily loan runs to a date.
+        minDurationCount: duration.minDurationCount,
+        maxDurationCount: duration.maxDurationCount,
       }));
     schemeTypes[detail.scheme.loanSchemeId] = detail.scheme.loanType;
   }
@@ -96,6 +110,7 @@ export default async function NewLoanApplicationPage() {
             }
             schemes={schemes}
             purposeOptions={purposeOptions}
+            loanTypeOptions={loanTypeOptions}
             schemeTerms={schemeTerms}
             schemeTypes={schemeTypes}
             canOverrideRate={hasPermissions(

@@ -38,49 +38,49 @@ export default function RecoveryCaseList({
           <TableRow>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Case
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Loan
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Customer
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Status
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Priority
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Officer
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-start font-medium text-gray-500 dark:text-gray-400"
             >
               Ageing
             </TableCell>
             <TableCell
               isHeader
-              className="px-5 py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+              className="text-theme-xs px-5 py-3 text-end font-medium text-gray-500 dark:text-gray-400"
             >
               Overdue
             </TableCell>
@@ -93,11 +93,11 @@ export default function RecoveryCaseList({
               <TableCell className="px-5 py-4 text-start">
                 <Link
                   href={`/recovery-cases/${row.recoveryCaseId}`}
-                  className="text-sm font-medium text-brand-500 hover:underline"
+                  className="text-brand-500 text-sm font-medium hover:underline"
                 >
                   {row.caseNumber ?? "View"}
                 </Link>
-                <p className="mt-0.5 text-theme-xs text-gray-400 dark:text-gray-500">
+                <p className="text-theme-xs mt-0.5 text-gray-400 dark:text-gray-500">
                   Opened {formatDate(row.openedDate)}
                 </p>
               </TableCell>
@@ -122,7 +122,7 @@ export default function RecoveryCaseList({
               </TableCell>
               <TableCell className="px-5 py-4 text-start">
                 <DelinquencyBucketBadge bucket={row.bucket} />
-                <p className="mt-0.5 text-theme-xs text-gray-400 dark:text-gray-500">
+                <p className="text-theme-xs mt-0.5 text-gray-400 dark:text-gray-500">
                   {row.daysPastDue} days
                 </p>
               </TableCell>

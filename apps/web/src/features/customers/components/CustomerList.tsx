@@ -1,10 +1,10 @@
 "use client";
 
 import type { CustomerSummary } from "@lms/types";
-import { Alert, Button } from "@lms/ui";
+import { Alert, Button, DataTable, EmptyState, type Column } from "@lms/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import {
   CustomerStatusBadge,
@@ -26,6 +26,11 @@ import {
  * `loadError` renders as an alert that is deliberately distinct from an empty
  * list: "you have no customers" and "we could not reach your customers" are
  * different claims, and conflating them is the dishonest option.
+ *
+ * The table is `DataTable`; the columns below are the whole of what used to be
+ * ~60 lines of hand-rolled `<table>` markup. No column is `sortable` — no list
+ * endpoint accepts a sort parameter, and sorting only the loaded page would be
+ * a wrong answer wearing the costume of a right one.
  */
 export default function CustomerList({
   customers,
@@ -53,6 +58,67 @@ export default function CustomerList({
     router.push(`/customers${next.size > 0 ? `?${next.toString()}` : ""}`);
   }
 
+  const columns = useMemo<Column<CustomerSummary>[]>(
+    () => [
+      {
+        key: "customer",
+        header: "Customer",
+        priority: "primary",
+        cell: (customer) => (
+          <Link
+            href={`/customers/${customer.customerId}`}
+            className="text-ink hover:text-accent focus-visible:ring-focus rounded-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+          >
+            {customer.fullName}
+          </Link>
+        ),
+      },
+      {
+        key: "customerCode",
+        header: "Customer ID",
+        priority: "primary",
+        cell: (customer) => (
+          <span className="text-ink-muted tabular">
+            {customer.customerCode}
+          </span>
+        ),
+      },
+      {
+        key: "mobile",
+        header: "Mobile",
+        // Masked server-side (Q-CUST-21). The full number is on the profile,
+        // which is one record and one audit entry per read.
+        cell: (customer) => (
+          <span className="text-ink-muted tabular">{customer.mobile}</span>
+        ),
+      },
+      {
+        key: "type",
+        header: "Type",
+        cell: (customer) => <CustomerTypeBadge type={customer.customerType} />,
+      },
+      {
+        key: "kyc",
+        header: "KYC",
+        cell: (customer) => <KycStatusBadge status={customer.kycStatus} />,
+      },
+      {
+        key: "status",
+        header: "Status",
+        cell: (customer) => <CustomerStatusBadge status={customer.status} />,
+      },
+      {
+        key: "branch",
+        header: "Branch",
+        priority: "detail",
+        cell: (customer) => (
+          <span className="text-ink-muted">{customer.branchName ?? "—"}</span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -64,15 +130,17 @@ export default function CustomerList({
             onChange={(event) => setTerm(event.target.value)}
             placeholder="Search by name, customer ID or phone"
             aria-label="Search customers"
-            className="shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30"
+            className="border-line bg-surface text-ink placeholder:text-ink-subtle focus:border-accent focus:ring-focus/20 rounded-control h-9 w-full border px-3 text-sm focus:ring-3 focus:outline-none"
           />
-          <Button size="sm">Search</Button>
+          <Button type="submit" size="md" variant="secondary">
+            Search
+          </Button>
         </form>
 
         {canCreate && (
-          <Link href="/customers/new">
-            <Button size="sm">Add Customer</Button>
-          </Link>
+          <Button type="button" size="md" variant="primary" asChild>
+            <Link href="/customers/new">Add Customer</Link>
+          </Button>
         )}
       </div>
 
@@ -82,79 +150,41 @@ export default function CustomerList({
           title="Customer list unavailable"
           message="We could not load customers just now. Refresh to try again."
         />
-      ) : customers.length === 0 ? (
-        <div
-          className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400"
-          role="status"
-        >
-          {initialSearch
-            ? `No customers match "${initialSearch}".`
-            : "No customers yet."}
-        </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="max-w-full overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="border-b border-gray-100 dark:border-gray-800">
-                <tr>
-                  {[
-                    "Customer",
-                    "Customer ID",
-                    "Mobile",
-                    "Type",
-                    "KYC",
-                    "Status",
-                    "Branch",
-                  ].map((heading) => (
-                    <th
-                      key={heading}
-                      scope="col"
-                      className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400"
-                    >
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {customers.map((customer) => (
-                  <tr key={customer.customerId}>
-                    <td className="px-5 py-4 text-sm">
-                      <Link
-                        href={`/customers/${customer.customerId}`}
-                        className="hover:text-brand-500 font-medium text-gray-800 dark:text-white/90"
-                      >
-                        {customer.fullName}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                      {customer.customerCode}
-                    </td>
-                    {/*
-                      Masked server-side (Q-CUST-21). The full number is on the
-                      profile, which is one record and one audit entry per read.
-                    */}
-                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                      {customer.mobile}
-                    </td>
-                    <td className="px-5 py-4 text-sm">
-                      <CustomerTypeBadge type={customer.customerType} />
-                    </td>
-                    <td className="px-5 py-4 text-sm">
-                      <KycStatusBadge status={customer.kycStatus} />
-                    </td>
-                    <td className="px-5 py-4 text-sm">
-                      <CustomerStatusBadge status={customer.status} />
-                    </td>
-                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                      {customer.branchName ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DataTable
+          caption="Customers"
+          rows={customers}
+          columns={columns}
+          rowKey={(customer) => customer.customerId}
+          emptyState={
+            initialSearch ? (
+              <EmptyState
+                title="No matches"
+                description={`No customers match "${initialSearch}".`}
+                action={
+                  <Link
+                    href="/customers"
+                    className="text-accent text-sm underline-offset-4 hover:underline"
+                  >
+                    Clear search
+                  </Link>
+                }
+              />
+            ) : (
+              <EmptyState
+                title="No customers yet"
+                description="Customers you add will appear here."
+                action={
+                  canCreate ? (
+                    <Button type="button" size="sm" variant="primary" asChild>
+                      <Link href="/customers/new">Add Customer</Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
+            )
+          }
+        />
       )}
     </div>
   );

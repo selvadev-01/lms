@@ -63,7 +63,9 @@ export default async function JournalsPage({
         {canCreate && (
           <div className="mb-5 flex justify-end">
             <Link href="/finance/journals/new">
-              <Button size="sm">New journal</Button>
+              <Button type="button" size="sm">
+                New journal
+              </Button>
             </Link>
           </div>
         )}

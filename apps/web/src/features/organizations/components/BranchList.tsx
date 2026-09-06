@@ -16,7 +16,7 @@ import {
 function SubmitButton({ label, busy }: { label: string; busy: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" variant="outline" disabled={pending}>
+    <Button type="submit" size="sm" variant="outline" disabled={pending}>
       {pending ? busy : label}
     </Button>
   );
@@ -111,7 +111,9 @@ export default function BranchList({
       {canCreate ? (
         <div className="flex justify-end">
           <Link href="/branches/new">
-            <Button size="sm">Add branch</Button>
+            <Button type="button" size="sm">
+              Add branch
+            </Button>
           </Link>
         </div>
       ) : null}
@@ -198,6 +200,7 @@ export default function BranchList({
 
                         {canDelete ? (
                           <Button
+                            type="button"
                             size="sm"
                             variant="outline"
                             onClick={() => {
@@ -231,7 +234,12 @@ export default function BranchList({
           className="flex justify-end gap-3"
         >
           <input type="hidden" name="branchId" value={target?.branchId ?? ""} />
-          <Button size="sm" variant="outline" onClick={closeModal}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={closeModal}
+          >
             Cancel
           </Button>
           <SubmitButton label="Delete branch" busy="Deleting…" />

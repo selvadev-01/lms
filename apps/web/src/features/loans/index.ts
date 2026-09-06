@@ -15,6 +15,7 @@ export { default as ApplicationWizard } from "./components/ApplicationWizard";
 export { default as CompletenessSummary } from "./components/CompletenessSummary";
 export { default as EmiSchedulePanel } from "./components/EmiSchedulePanel";
 export { default as LoanProductList } from "./components/LoanProductList";
+export { default as LoanSchemeDetail } from "./components/LoanSchemeDetail";
 export { default as LoanSchemeList } from "./components/LoanSchemeList";
 export type { Capabilities } from "./components/ApplicationDetail";
 export {

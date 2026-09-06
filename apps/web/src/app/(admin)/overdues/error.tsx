@@ -30,7 +30,7 @@ export default function Error({
       </div>
 
       <div className="mt-5">
-        <Button size="sm" variant="outline" onClick={reset}>
+        <Button type="button" size="sm" variant="outline" onClick={reset}>
           Try again
         </Button>
       </div>

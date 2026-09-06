@@ -1,4 +1,4 @@
-# 1. Adopt the TailAdmin free template as our application base
+# 1. Adopt a free admin template as our application base
 
 **Status:** Accepted
 **Date:** 2026-08-12
@@ -9,7 +9,7 @@ We needed a common starting point for multiple enterprise Next.js applications
 rather than scaffolding each one from `create-next-app` and rebuilding the same
 admin shell every time.
 
-TailAdmin's free Next.js template (v2.3.0 — Next 16.1.6, React 19.2, Tailwind v4,
+A free Next.js admin template (v2.3.0 — Next 16.1.6, React 19.2, Tailwind v4,
 TypeScript strict, App Router) provided a working sidebar/header shell, ~20 UI
 primitives, 58 icons, and a coherent Tailwind v4 token system. What it did not
 provide: authentication, a data layer, tests, error boundaries, environment
@@ -40,8 +40,8 @@ green quality gates on day one. The deletions are documented in TEMPLATE-GUIDE.m
 so the same prune can be repeated against a newer upstream release.
 
 **Negative.** We inherit a codebase we did not write. Upstream fixes no longer
-flow to us — we are the maintainer now. The pristine v2.3.0 template is kept at
-`c:\projects\tailadmin-v2.3.0-pristine` for diffing against future releases.
+flow to us — we are the maintainer now. The pristine v2.3.0 template is kept in a
+sibling directory for diffing against future releases.
 
 **Deferred.** Authentication is deliberately not chosen here — it varies per
 project. Every `(admin)` route is publicly reachable until a project adds

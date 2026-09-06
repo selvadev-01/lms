@@ -104,11 +104,7 @@ export function TemplateList({
 // Event rules
 // ---------------------------------------------------------------------------
 
-export function RuleList({
-  rules,
-}: {
-  rules: NotificationEventRuleSummary[];
-}) {
+export function RuleList({ rules }: { rules: NotificationEventRuleSummary[] }) {
   if (rules.length === 0) {
     return <p className={EMPTY_CLASS}>No event rules match this view.</p>;
   }
@@ -219,7 +215,10 @@ export function DeliveryList({
             <TableCell isHeader className={HEADER_CLASS}>
               Attempts
             </TableCell>
-            <TableCell isHeader className="text-theme-xs px-5 py-3 text-end font-medium text-gray-500 dark:text-gray-400">
+            <TableCell
+              isHeader
+              className="text-theme-xs px-5 py-3 text-end font-medium text-gray-500 dark:text-gray-400"
+            >
               Actions
             </TableCell>
           </TableRow>

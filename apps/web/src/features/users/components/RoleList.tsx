@@ -17,7 +17,7 @@ import { RoleStatusBadge } from "./StatusBadge";
 function SubmitButton({ label, busy }: { label: string; busy: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" variant="outline" disabled={pending}>
+    <Button type="submit" size="sm" variant="outline" disabled={pending}>
       {pending ? busy : label}
     </Button>
   );
@@ -106,7 +106,9 @@ export default function RoleList({
       {canCreate ? (
         <div className="flex justify-end">
           <Link href="/roles/new">
-            <Button size="sm">Create role</Button>
+            <Button type="button" size="sm">
+              Create role
+            </Button>
           </Link>
         </div>
       ) : null}
@@ -202,6 +204,7 @@ export default function RoleList({
 
                         {canDelete && !role.isSystem ? (
                           <Button
+                            type="button"
                             size="sm"
                             variant="outline"
                             onClick={() => {
@@ -232,7 +235,12 @@ export default function RoleList({
           existing assignments.
         </p>
         <div className="flex justify-end gap-3">
-          <Button size="sm" variant="outline" onClick={closeModal}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={closeModal}
+          >
             Cancel
           </Button>
           <form

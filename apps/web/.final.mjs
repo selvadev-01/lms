@@ -1,0 +1,11 @@
+import { chromium } from "@playwright/test";
+const b = await chromium.launch();
+const p = await (await b.newContext({ storageState: "e2e/.auth/super-admin.json", viewport:{width:1440,height:900} })).newPage();
+await p.goto("http://localhost:3000/customers", { waitUntil: "networkidle" });
+await p.screenshot({ path: ".final-light.png" });
+await p.evaluate(()=>{localStorage.setItem("theme","dark");document.documentElement.classList.add("dark");});
+await p.waitForTimeout(500);
+await p.screenshot({ path: ".final-dark.png" });
+console.log("accent (Add Customer bg):", await p.getByRole("link",{name:"Add Customer"}).evaluate(e=>getComputedStyle(e).backgroundColor));
+console.log("dark body bg:", await p.evaluate(()=>getComputedStyle(document.body).backgroundColor));
+await b.close();

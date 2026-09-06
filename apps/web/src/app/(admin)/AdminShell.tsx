@@ -26,7 +26,9 @@ export default function AdminShell({
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
-  // Dynamic class for main content margin based on sidebar state
+  // Dynamic class for main content margin based on sidebar state.
+  // The widths mirror `AppSidebar`'s own `w-[290px]` / `w-[90px]` — the two
+  // files are the only owners of these numbers and must change together.
   const mainContentMargin = isMobileOpen
     ? "ml-0"
     : isExpanded || isHovered
@@ -35,6 +37,17 @@ export default function AdminShell({
 
   return (
     <div className="min-h-screen xl:flex">
+      {/* First focusable element on the page. A keyboard or screen-reader user
+          would otherwise tab through the entire sidebar nav on every
+          navigation before reaching the content they asked for. Visually
+          hidden until focused. */}
+      <a
+        href="#main-content"
+        className="bg-surface text-ink border-line focus:ring-focus rounded-control sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:border focus:px-4 focus:py-2 focus:ring-2 focus:outline-none"
+      >
+        Skip to main content
+      </a>
+
       {/* Sidebar and Backdrop */}
       <AppSidebar permissions={permissions} />
       <Backdrop />
@@ -44,10 +57,16 @@ export default function AdminShell({
       >
         {/* Header */}
         <AppHeader user={user} permissions={permissions} />
-        {/* Page Content */}
-        <div className="mx-auto max-w-(--breakpoint-2xl) p-4 md:p-6">
+        {/* Page Content. `main` is the landmark the skip link targets and the
+            one assistive tech uses to jump past the chrome; `tabIndex={-1}`
+            makes it a valid focus target without adding it to the tab order. */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-(--breakpoint-2xl) p-4 focus:outline-none md:p-6"
+        >
           {children}
-        </div>
+        </main>
       </div>
     </div>
   );

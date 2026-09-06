@@ -144,14 +144,18 @@ export function TemplateStatusBadge({
 }: {
   status: NotificationTemplateStatus;
 }) {
-  return <Badge color={TEMPLATE_TONE[status]}>{labelFor(
-    [
-      { value: "DRAFT", label: "Draft" },
-      { value: "ACTIVE", label: "Active" },
-      { value: "INACTIVE", label: "Inactive" },
-    ],
-    status,
-  )}</Badge>;
+  return (
+    <Badge color={TEMPLATE_TONE[status]}>
+      {labelFor(
+        [
+          { value: "DRAFT", label: "Draft" },
+          { value: "ACTIVE", label: "Active" },
+          { value: "INACTIVE", label: "Inactive" },
+        ],
+        status,
+      )}
+    </Badge>
+  );
 }
 
 /** A rule an organization has marked unsuppressible (Rules 47, 48). */

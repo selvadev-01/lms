@@ -131,9 +131,9 @@ export default function MaintenanceModePanel({
           <SubmitButton label="Apply" />
 
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Reads stay available throughout. Maintenance mode never grants access
-            — a user who lacks a permission is still refused for that reason.
-            Changes take up to a minute to reach every server.
+            Reads stay available throughout. Maintenance mode never grants
+            access — a user who lacks a permission is still refused for that
+            reason. Changes take up to a minute to reach every server.
           </p>
         </form>
       ) : null}

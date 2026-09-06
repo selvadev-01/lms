@@ -67,8 +67,8 @@ try to install, provision, or containerise a database. No Docker.
 
   apps/api/   NestJS 11. Bare scaffold — app.module/controller/service/main
               only. No database, no Prisma, no auth, no modules.
-  apps/web/   Next.js 16, React 19, Tailwind v4, App Router. TailAdmin-derived
-              UI shell. Feature folders exist but are empty (.gitkeep only).
+  apps/web/   Next.js 16, React 19, Tailwind v4, App Router. LMS admin UI
+              shell. Feature folders exist but are empty (.gitkeep only).
   packages/   @lms/types, @lms/validation, @lms/constants, @lms/ui,
               @lms/emi, @lms/config, @lms/design-tokens
 

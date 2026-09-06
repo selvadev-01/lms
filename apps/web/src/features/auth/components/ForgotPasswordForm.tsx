@@ -18,7 +18,7 @@ function SubmitButton() {
   // The accessible name stays "Send code" while idle; the e2e suite matches it
   // exactly. Only the disabled state changes while the request is in flight.
   return (
-    <Button className="w-full" size="sm" disabled={pending}>
+    <Button type="submit" className="w-full" size="sm" disabled={pending}>
       {pending ? "Sending…" : "Send code"}
     </Button>
   );

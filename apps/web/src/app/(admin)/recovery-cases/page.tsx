@@ -46,7 +46,7 @@ export default async function RecoveryCasesPage({
       <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
         <form className="mb-5 flex flex-wrap items-end gap-3" method="get">
           <label className="text-sm">
-            <span className="mb-1 block text-theme-xs text-gray-500 dark:text-gray-400">
+            <span className="text-theme-xs mb-1 block text-gray-500 dark:text-gray-400">
               Search
             </span>
             <input
@@ -59,7 +59,7 @@ export default async function RecoveryCasesPage({
           </label>
 
           <label className="text-sm">
-            <span className="mb-1 block text-theme-xs text-gray-500 dark:text-gray-400">
+            <span className="text-theme-xs mb-1 block text-gray-500 dark:text-gray-400">
               Status
             </span>
             <select
@@ -77,7 +77,7 @@ export default async function RecoveryCasesPage({
           </label>
 
           <label className="text-sm">
-            <span className="mb-1 block text-theme-xs text-gray-500 dark:text-gray-400">
+            <span className="text-theme-xs mb-1 block text-gray-500 dark:text-gray-400">
               Priority
             </span>
             <select
@@ -96,7 +96,7 @@ export default async function RecoveryCasesPage({
 
           <button
             type="submit"
-            className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
+            className="bg-brand-500 hover:bg-brand-600 h-10 rounded-lg px-4 text-sm font-medium text-white"
           >
             Apply
           </button>

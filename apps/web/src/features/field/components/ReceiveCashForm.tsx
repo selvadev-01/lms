@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert } from "@lms/ui";
+import { Alert, Button } from "@lms/ui";
 import { useActionState, useState } from "react";
 
 import {
@@ -87,13 +87,17 @@ export default function ReceiveCashForm({
         <p className="mt-1 text-xl font-semibold text-gray-800 tabular-nums dark:text-white/90">
           {formatPaise(declaredPaise)}
         </p>
-        <button
+        {/* `size="lg"` is a 44px target: tapped one-handed at a cash counter,
+            often in a hurry. */}
+        <Button
           type="button"
+          variant="secondary"
+          size="lg"
+          className="mt-2"
           onClick={() => setRupees(paiseToRupees(declaredPaise))}
-          className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
         >
           Count matches
-        </button>
+        </Button>
       </div>
 
       <Field

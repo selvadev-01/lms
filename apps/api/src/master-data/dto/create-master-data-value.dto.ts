@@ -1,6 +1,7 @@
 import { MASTER_DATA_CATEGORIES } from '@lms/validation';
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -61,4 +62,17 @@ export class CreateMasterDataValueDto {
   @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])
   status?: 'ACTIVE' | 'INACTIVE';
+
+  /**
+   * LOAN_TYPE only: must an application of this type carry a COLLATERAL
+   * document before it can be submitted?
+   *
+   * This is what replaced the hardcoded `COLLATERAL_LOAN_TYPES` set naming GOLD
+   * and VEHICLE — once tenants define their own loan types, only the row itself
+   * can answer. The service refuses it for any other category rather than
+   * storing an answer to a question that category does not ask.
+   */
+  @IsOptional()
+  @IsBoolean()
+  requiresCollateral?: boolean;
 }

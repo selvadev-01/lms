@@ -39,7 +39,6 @@ export async function createEmployeeAction(
     name: formData.get("name"),
     mobile: formData.get("mobile"),
     email: formData.get("email"),
-    employeeCode: formData.get("employeeCode"),
     branchId: formData.get("branchId"),
     roleIds: formData.getAll("roleIds"),
     status: formData.get("status"),

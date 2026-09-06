@@ -209,8 +209,16 @@ export function GpsCheckInPanel({
         )}
       </div>
 
+      {/* `size="lg"` throughout: this is the field officer's first action of the
+          day, taken one-handed, outdoors, often in bright sun. 44px targets. */}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={startCheckIn} disabled={busy}>
+        <Button
+          type="button"
+          variant="primary"
+          size="lg"
+          onClick={startCheckIn}
+          disabled={busy}
+        >
           {busy
             ? "Finding your location…"
             : verified || message
@@ -219,7 +227,12 @@ export function GpsCheckInPanel({
         </Button>
 
         {verified && (
-          <Button variant="outline" onClick={() => router.push("/field")}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            onClick={() => router.push("/field")}
+          >
             Continue to field operations
           </Button>
         )}

@@ -45,7 +45,7 @@ function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
 
   return (
-    <Button size="sm" disabled={pending}>
+    <Button type="submit" size="sm" disabled={pending}>
       {pending ? "Saving…" : label}
     </Button>
   );

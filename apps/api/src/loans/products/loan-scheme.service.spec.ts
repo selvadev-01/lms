@@ -4,7 +4,8 @@ import { AuditAction, AuditService } from '../../audit/audit.service';
 import type { RequestMeta } from '../../auth/auth.service';
 import type { AuthContext } from '../../common/auth-context';
 import { PrismaService } from '../../prisma/prisma.service';
-import { LoanSchemeService } from './loan-scheme.service';
+import { LoanSchemeService, termIsOffered } from './loan-scheme.service';
+import { validateSchemeDurationRange } from './dto/scheme-duration.dto';
 
 /**
  * Loan Schemes — selectability, activation guard and the duration delete guard.
@@ -80,7 +81,7 @@ type SchemeRow = {
   loanProduct: {
     code: string;
     name: string;
-    loanType: 'PERSONAL' | 'BUSINESS' | 'GOLD' | 'VEHICLE';
+    loanType: string;
     status: 'DRAFT' | 'ACTIVE' | 'INACTIVE';
   };
   durations: DurationRow[];
@@ -365,6 +366,28 @@ describe('LoanSchemeService — assertSelectable', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  /**
+   * Daily terms are ordinary, and this pins that.
+   *
+   * The wizard's Frequency dropdown is derived from a scheme's duration rows —
+   * it offers only frequencies some term exists for — so a scheme that stops
+   * carrying a DAILY row makes "Daily" silently unreachable in the UI with
+   * nothing failing. That is exactly how it went missing once already. Asserting
+   * both directions here is the cheap guard: a daily term is accepted when
+   * offered, and the mismatched count is still refused.
+   */
+  it('accepts a daily term the scheme offers', async () => {
+    const daily = buildScheme({
+      durations: [buildDuration({ frequency: 'DAILY', durationCount: 100 })],
+    });
+
+    await expect(callAssert([daily], 'DAILY', 100)).resolves.toBeDefined();
+    // The pair is still the unit: 100 daily being offered says nothing about 60.
+    await expect(callAssert([daily], 'DAILY', 60)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
   it('refuses a duration count the scheme does not offer (Scenario 11)', async () => {
     // The pair is the unit: 12 monthly being offered says nothing about 18.
     await expect(
@@ -436,5 +459,136 @@ describe('LoanSchemeService — duration delete guard', () => {
     await expect(
       service.removeDuration(actor(), SCHEME_ID, UNKNOWN_ID, META),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+/**
+ * The one implementation of "does this scheme offer this term".
+ *
+ * Checked in two places — inside the submit transaction, and by the completeness
+ * summary — which is why it is a shared function rather than two `.some(...)`
+ * calls. A drifted copy would put a green tick on the review screen for a term
+ * submit then refuses.
+ */
+describe('termIsOffered', () => {
+  const exact = (over = {}) => ({
+    status: 'ACTIVE',
+    frequency: 'MONTHLY',
+    durationCount: 12,
+    minDurationCount: null,
+    maxDurationCount: null,
+    ...over,
+  });
+
+  it('matches an exact term only on its own count', () => {
+    expect(termIsOffered([exact()], 'MONTHLY', 12)).toBe(true);
+    // The pair is the unit: 12 monthly being offered says nothing about 18.
+    expect(termIsOffered([exact()], 'MONTHLY', 18)).toBe(false);
+  });
+
+  it('does not match across frequencies', () => {
+    expect(termIsOffered([exact()], 'WEEKLY', 12)).toBe(false);
+  });
+
+  it('ignores an inactive row', () => {
+    expect(termIsOffered([exact({ status: 'INACTIVE' })], 'MONTHLY', 12)).toBe(
+      false,
+    );
+  });
+
+  // The reason ranges exist: a daily loan runs to a date, so its count is
+  // whatever the dates imply rather than an entry in a published list.
+  it('accepts any count inside a range, and refuses outside it', () => {
+    const ranged = [
+      exact({
+        frequency: 'DAILY',
+        durationCount: 100,
+        minDurationCount: 30,
+        maxDurationCount: 180,
+      }),
+    ];
+
+    for (const days of [30, 45, 100, 137, 180]) {
+      expect(termIsOffered(ranged, 'DAILY', days)).toBe(true);
+    }
+    // Inclusive bounds, so only beyond them is refused.
+    expect(termIsOffered(ranged, 'DAILY', 29)).toBe(false);
+    expect(termIsOffered(ranged, 'DAILY', 181)).toBe(false);
+  });
+
+  it('still refuses an inactive ranged row', () => {
+    const ranged = [
+      exact({
+        status: 'INACTIVE',
+        frequency: 'DAILY',
+        durationCount: 100,
+        minDurationCount: 30,
+        maxDurationCount: 180,
+      }),
+    ];
+
+    expect(termIsOffered(ranged, 'DAILY', 100)).toBe(false);
+  });
+
+  /**
+   * A row assembled without the fields — a mapper, a fixture — must behave as an
+   * exact term. Reading `undefined` as a bound would silently accept every
+   * count, which is the failure mode worth pinning rather than discovering.
+   */
+  it('treats a row with the bounds omitted as an exact term', () => {
+    const legacy = [
+      { status: 'ACTIVE', frequency: 'MONTHLY', durationCount: 12 },
+    ];
+
+    expect(termIsOffered(legacy, 'MONTHLY', 12)).toBe(true);
+    expect(termIsOffered(legacy, 'MONTHLY', 13)).toBe(false);
+  });
+});
+
+describe('validateSchemeDurationRange', () => {
+  it('accepts an exact term with no bounds', () => {
+    expect(validateSchemeDurationRange({ durationCount: 12 })).toBeNull();
+  });
+
+  it('accepts a coherent range', () => {
+    expect(
+      validateSchemeDurationRange({
+        durationCount: 100,
+        minDurationCount: 30,
+        maxDurationCount: 180,
+      }),
+    ).toBeNull();
+  });
+
+  // One bound alone would behave as an exact term while looking like a range.
+  it('refuses one bound without the other', () => {
+    expect(
+      validateSchemeDurationRange({
+        durationCount: 100,
+        minDurationCount: 30,
+      }),
+    ).toMatch(/both/i);
+  });
+
+  it('refuses a reversed range', () => {
+    expect(
+      validateSchemeDurationRange({
+        durationCount: 100,
+        minDurationCount: 180,
+        maxDurationCount: 30,
+      }),
+    ).toMatch(/cannot exceed/i);
+  });
+
+  // The default is what the form pre-fills; outside its own range it would offer
+  // a value the submit gate then refuses.
+  it('refuses a default outside its own range', () => {
+    expect(
+      validateSchemeDurationRange({
+        durationCount: 200,
+        minDurationCount: 30,
+        maxDurationCount: 180,
+      }),
+    ).toMatch(/within/i);
   });
 });

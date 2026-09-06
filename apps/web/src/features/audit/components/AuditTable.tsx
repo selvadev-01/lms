@@ -23,7 +23,7 @@ export default function AuditTable({
 }) {
   if (loadError || !result) {
     return (
-      <p className="text-sm text-error-500">
+      <p className="text-error-500 text-sm">
         We could not load the audit trail. Refresh to try again.
       </p>
     );
@@ -41,7 +41,7 @@ export default function AuditTable({
     <div className="space-y-4">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="border-b border-gray-200 text-xs uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
+          <thead className="border-b border-gray-200 text-xs text-gray-500 uppercase dark:border-gray-800 dark:text-gray-400">
             <tr>
               <th className="px-3 py-2">When</th>
               <th className="px-3 py-2">Action</th>
@@ -56,7 +56,7 @@ export default function AuditTable({
                 key={event.auditId}
                 className="border-b border-gray-100 dark:border-gray-800"
               >
-                <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
+                <td className="px-3 py-3 text-xs whitespace-nowrap text-gray-600 dark:text-gray-300">
                   {new Date(event.occurredAt).toLocaleString("en-IN", {
                     timeZone: "Asia/Kolkata",
                   })}
@@ -70,14 +70,12 @@ export default function AuditTable({
                 <td className="px-3 py-3 text-xs text-gray-600 dark:text-gray-300">
                   {/* A scheduled run has no human actor (Rule 63). Saying so
                       beats an empty cell that reads as missing data. */}
-                  {event.actorName ?? (
-                    <Badge color="light">System</Badge>
-                  )}
+                  {event.actorName ?? <Badge color="light">System</Badge>}
                 </td>
                 <td className="px-3 py-3 text-right">
                   <Link
                     href={`/admin/audit/${event.auditId}`}
-                    className="text-xs font-medium text-brand-500 hover:underline"
+                    className="text-brand-500 text-xs font-medium hover:underline"
                   >
                     View
                   </Link>

@@ -77,6 +77,8 @@ function build(
     mobileVerifiedAt?: Date | null;
     active?: Record<string, unknown> | null;
     otpMatches?: boolean;
+    status?: 'PENDING' | 'ACTIVE' | 'INACTIVE';
+    devCode?: string | null;
   } = {},
 ) {
   const customer = {
@@ -84,6 +86,7 @@ function build(
     customerType: options.customerType ?? ('LOCAL' as const),
     mobile: '9100000006',
     mobileVerifiedAt: options.mobileVerifiedAt ?? null,
+    status: options.status ?? ('PENDING' as const),
   };
 
   const audit = { record: jest.fn().mockResolvedValue(undefined) };
@@ -173,6 +176,7 @@ function build(
       if (key === 'customers.otpLength') return 6;
       if (key === 'customers.otpTtlMinutes') return 15;
       if (key === 'customers.otpMaxAttempts') return 5;
+      if (key === 'customers.otpDevCode') return options.devCode ?? null;
       return undefined;
     }),
   } as unknown as ConfigService;
@@ -336,6 +340,124 @@ describe('CustomerMobileService.verifyOtp', () => {
       expect.objectContaining({ action: AuditAction.CUSTOMER_MOBILE_VERIFIED }),
       expect.anything(),
     );
+  });
+
+  // Q-CUST-23. Verification is what completes a LOCAL customer, so it activates
+  // them rather than leaving a verified customer waiting on a second call.
+  it('activates a PENDING LOCAL customer', async () => {
+    const { service, customer } = build({ status: 'PENDING' });
+    await service.verifyOtp(actor(), CUSTOMER_ID, { otp: '123456' }, META);
+
+    expect(jest.mocked(customer).status).toBe('ACTIVE');
+  });
+
+  it('audits the activation separately from the verification', async () => {
+    const { service, audit } = build({ status: 'PENDING' });
+    await service.verifyOtp(actor(), CUSTOMER_ID, { otp: '123456' }, META);
+
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.CUSTOMER_ACTIVATED,
+        newData: containing({ status: 'ACTIVE' }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  // Someone deactivated this customer on purpose. Re-verifying their number is
+  // not a reason to undo that.
+  it('does not reactivate an INACTIVE customer', async () => {
+    const { service, customer, audit } = build({ status: 'INACTIVE' });
+    await service.verifyOtp(actor(), CUSTOMER_ID, { otp: '123456' }, META);
+
+    expect(jest.mocked(customer).status).toBe('INACTIVE');
+    expect(audit.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: AuditAction.CUSTOMER_ACTIVATED }),
+      expect.anything(),
+    );
+  });
+
+  // Rule 6. A KYC customer's activation waits on an approved KYC record, and an
+  // OTP must never stand in for one. Reachable because a LOCAL customer can be
+  // converted to KYC while a code is outstanding.
+  it('does not activate a KYC customer', async () => {
+    const { service, customer } = build({
+      customerType: 'KYC',
+      status: 'PENDING',
+    });
+    await service.verifyOtp(actor(), CUSTOMER_ID, { otp: '123456' }, META);
+
+    expect(jest.mocked(customer).status).toBe('PENDING');
+  });
+
+  describe('development code', () => {
+    it('accepts the configured code without hashing', async () => {
+      const { service, customer, passwordsMocks } = build({
+        devCode: '000000',
+        // Proves the dev code is what verified: a real comparison would fail.
+        otpMatches: false,
+      });
+      await service.verifyOtp(actor(), CUSTOMER_ID, { otp: '000000' }, META);
+
+      expect(jest.mocked(customer).mobileVerifiedAt).toBeInstanceOf(Date);
+      expect(passwordsMocks.verify).not.toHaveBeenCalled();
+    });
+
+    it('still rejects a wrong code while it is set', async () => {
+      const { service } = build({ devCode: '000000', otpMatches: false });
+
+      await expect(
+        service.verifyOtp(actor(), CUSTOMER_ID, { otp: '999999' }, META),
+      ).rejects.toThrow('not correct');
+    });
+
+    // The shortcut skips the comparison, never the guards around it.
+    it('still rejects the dev code once it has expired', async () => {
+      const { service } = build({
+        devCode: '000000',
+        active: {
+          verificationId: VERIFICATION_ID,
+          mobile: '9100000006',
+          otpHash: 'hashed',
+          attemptCount: 0,
+          expiresAt: new Date(Date.now() - 1_000),
+          consumedAt: null,
+        },
+      });
+
+      await expect(
+        service.verifyOtp(actor(), CUSTOMER_ID, { otp: '000000' }, META),
+      ).rejects.toThrow('expired');
+    });
+
+    it('is off unless configured', async () => {
+      const { service, passwordsMocks } = build({ otpMatches: true });
+      await service.verifyOtp(actor(), CUSTOMER_ID, { otp: '000000' }, META);
+
+      // With no dev code the real comparison is the only thing that can pass.
+      expect(passwordsMocks.verify).toHaveBeenCalled();
+    });
+  });
+
+  describe('onModuleInit', () => {
+    const nodeEnv = process.env.NODE_ENV;
+    afterEach(() => {
+      process.env.NODE_ENV = nodeEnv;
+    });
+
+    it('refuses to start with a dev code in production', () => {
+      process.env.NODE_ENV = 'production';
+      const { service } = build({ devCode: '000000' });
+
+      expect(() => service.onModuleInit()).toThrow('must not be set');
+    });
+
+    it('starts in production when no dev code is set', () => {
+      process.env.NODE_ENV = 'production';
+      const { service } = build();
+
+      expect(() => service.onModuleInit()).not.toThrow();
+    });
   });
 
   it('rejects an incorrect code and does not stamp the customer', async () => {

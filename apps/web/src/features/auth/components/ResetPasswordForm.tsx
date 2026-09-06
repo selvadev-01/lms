@@ -19,7 +19,7 @@ import PasswordStrengthMeter, {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button className="w-full" size="sm" disabled={pending}>
+    <Button type="submit" className="w-full" size="sm" disabled={pending}>
       {pending ? "Resetting…" : "Reset password"}
     </Button>
   );

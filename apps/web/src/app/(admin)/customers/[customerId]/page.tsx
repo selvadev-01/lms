@@ -61,6 +61,10 @@ export default async function CustomerProfilePage({
           genderOptions={genderOptions}
           relationshipOptions={relationshipOptions}
           canUpdate={hasPermissions(user, PERMISSIONS.CUSTOMERS_UPDATE)}
+          canVerifyMobile={hasPermissions(
+            user,
+            PERMISSIONS.CUSTOMERS_MOBILE_VERIFY,
+          )}
           canActivate={hasPermissions(user, PERMISSIONS.CUSTOMERS_ACTIVATE)}
           canDelete={hasPermissions(user, PERMISSIONS.CUSTOMERS_DELETE)}
           canConvert={hasPermissions(user, PERMISSIONS.CUSTOMERS_CONVERT)}

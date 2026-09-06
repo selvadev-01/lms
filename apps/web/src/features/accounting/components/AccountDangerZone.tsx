@@ -167,6 +167,7 @@ export default function AccountDangerZone({
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <Button
+              type="button"
               size="sm"
               variant="outline"
               disabled={!account.canDelete}

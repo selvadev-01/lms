@@ -49,7 +49,7 @@ export type ApplicationWithRelations = LoanApplicationRow & {
   branch: { name: string };
   loanProduct: {
     code: string;
-    loanType: 'PERSONAL' | 'BUSINESS' | 'GOLD' | 'VEHICLE';
+    loanType: string;
   };
   loanScheme: { code: string; name: string };
 };

@@ -28,7 +28,7 @@ import {
 function SaveButton({ mode, noun }: { mode: "create" | "edit"; noun: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" disabled={pending}>
+    <Button type="submit" size="sm" disabled={pending}>
       {pending
         ? mode === "create"
           ? "Creating…"
@@ -144,25 +144,24 @@ export default function UserForm({
           />
         </div>
 
-        {isEmployee ? (
+        {/*
+          Employee ID is shown but never submitted, and only once it exists.
+          The server allocates it on create, so on the add form there is nothing
+          to show and nothing to ask for — an empty disabled box would just
+          raise the question of what to type in it. On edit it is displayed
+          because it is how the rest of the system refers to this person, and
+          disabled because historical records identify them by it: changing it
+          would rewrite what those records point at. It carries no `name`, so it
+          stays out of the FormData either way.
+        */}
+        {isEmployee && user?.employeeCode ? (
           <div>
-            <Label htmlFor="employeeCode">
-              Employee ID <span className="text-error-500">*</span>
-            </Label>
+            <Label htmlFor="employeeCode">Employee ID</Label>
             <Input
               id="employeeCode"
-              // Fixed after creation: historical records identify the employee
-              // by this code, so changing it would rewrite what they refer to.
-              name={user ? undefined : "employeeCode"}
-              defaultValue={user?.employeeCode ?? ""}
-              disabled={Boolean(user) || !canEdit}
-              error={Boolean(fieldError("employeeCode"))}
-              hint={
-                fieldError("employeeCode") ??
-                (user
-                  ? "The Employee ID is fixed after creation."
-                  : "Unique within your organization, e.g. EMP021.")
-              }
+              defaultValue={user.employeeCode}
+              disabled
+              hint="Assigned automatically and fixed after creation."
             />
           </div>
         ) : null}

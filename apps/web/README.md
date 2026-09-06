@@ -2,10 +2,9 @@
 
 Next.js 16 admin base — App Router, React 19, Tailwind v4, TypeScript strict.
 
-Derived from the TailAdmin free template, stripped of demo code and branding and
-fitted with the baseline an enterprise project needs. See
-[TEMPLATE-GUIDE.md](TEMPLATE-GUIDE.md) for what was removed, why, and what to
-build next.
+The web application for the LMS lending platform. See
+[TEMPLATE-GUIDE.md](TEMPLATE-GUIDE.md) for how the base was assembled and what
+to build next.
 
 ## Getting started
 

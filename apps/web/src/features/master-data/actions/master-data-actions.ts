@@ -42,6 +42,13 @@ export async function createMasterDataValueAction(
     // An empty input means "no preference", not zero. Coercing `""` would make
     // every blank submission sort to the top of the list.
     ...(rawOrder === null || rawOrder === "" ? {} : { displayOrder: rawOrder }),
+    // Only the loan-type form renders this control, and only that form posts
+    // the marker below. An unchecked box posts nothing at all, so the marker is
+    // what distinguishes "unchecked" from "this form has no such field" — the
+    // API refuses the flag outright for other categories.
+    ...(formData.get("hasCollateralField") === null
+      ? {}
+      : { requiresCollateral: formData.get("requiresCollateral") === "true" }),
   });
 
   if (!parsed.success) {
@@ -80,6 +87,12 @@ export async function updateMasterDataValueAction(
     ...(rawLabel === null ? {} : { label: rawLabel }),
     ...(rawOrder === null || rawOrder === "" ? {} : { displayOrder: rawOrder }),
     ...(rawStatus === null ? {} : { status: rawStatus }),
+    // See the create action: the marker, not the checkbox, says whether this
+    // form carries the field. Without it, unticking the box would post nothing
+    // and be read as "unchanged" — the flag could be set but never cleared.
+    ...(formData.get("hasCollateralField") === null
+      ? {}
+      : { requiresCollateral: formData.get("requiresCollateral") === "true" }),
   });
 
   if (!parsed.success) {

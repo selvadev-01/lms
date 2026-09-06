@@ -21,7 +21,7 @@ import { AccountStatusBadge } from "./StatusBadge";
 function SubmitButton({ label, busy }: { label: string; busy: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" variant="outline" disabled={pending}>
+    <Button type="submit" size="sm" variant="outline" disabled={pending}>
       {pending ? busy : label}
     </Button>
   );
@@ -132,7 +132,7 @@ export default function UserList({
       {canCreate ? (
         <div className="flex justify-end">
           <Link href={`${basePath}/new`}>
-            <Button size="sm">
+            <Button type="button" size="sm">
               {isEmployee ? "Add employee" : "Add user"}
             </Button>
           </Link>
@@ -238,6 +238,7 @@ export default function UserList({
 
                         {canDelete ? (
                           <Button
+                            type="button"
                             size="sm"
                             variant="outline"
                             onClick={() => {
@@ -268,7 +269,12 @@ export default function UserList({
           reversible.
         </p>
         <div className="flex justify-end gap-3">
-          <Button size="sm" variant="outline" onClick={closeModal}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={closeModal}
+          >
             Cancel
           </Button>
           <form

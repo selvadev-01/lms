@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { PERMISSIONS } from "@lms/constants";
 import { redirect } from "next/navigation";
 
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import { requireSession } from "@/features/auth";
+import { requirePermissions } from "@/features/auth/utils/require-permissions";
 import { GpsCheckInPanel, fetchCheckInStatus } from "@/features/field";
 
 export const metadata: Metadata = { title: "GPS Check-in" };
@@ -26,15 +27,21 @@ const GPS_TIMEOUT_SECONDS = 30;
  *
  * Deliberately does not use `requireVerifiedCheckIn()` — this is the screen
  * that guard sends people to, and calling it here would loop.
+ *
+ * Gated on `field.checkin`, the same permission the API's `/field/check-in`
+ * controller requires. The `forbidden` branch below still stands: this check
+ * decides locally what that round trip would otherwise have to discover, so a
+ * non-field user is redirected before the request rather than after it.
  */
 export default async function GpsCheckInPage() {
-  await requireSession();
+  await requirePermissions(PERMISSIONS.FIELD_CHECKIN);
 
   const result = await fetchCheckInStatus();
 
   if (result.status === "unauthenticated") redirect("/signin");
-  // Not a field employee at all: send them to the dashboard they can use
-  // rather than to a screen that will only refuse them.
+  // Kept as defence in depth: the permission above is resolved from a profile
+  // cached for up to 60s, so a revoked grant can still reach the API and be
+  // refused there.
   if (result.status === "forbidden") redirect("/");
 
   const status = result.status === "ok" ? result.data : null;

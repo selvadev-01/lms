@@ -1,11 +1,5 @@
 import { Transform } from 'class-transformer';
-import {
-  IsIn,
-  IsNotEmpty,
-  IsString,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
 
 import { trim } from '../../../common/transforms/trim';
 
@@ -41,9 +35,19 @@ export class CreateLoanProductDto {
   @MaxLength(150)
   name!: string;
 
-  /** The four types the source allows (Module 07 Rule 4, Scenario 9). */
-  @IsIn(['PERSONAL', 'BUSINESS', 'GOLD', 'VEHICLE'], {
-    message: 'Loan Type is required',
-  })
-  loanType!: 'PERSONAL' | 'BUSINESS' | 'GOLD' | 'VEHICLE';
+  /**
+   * A `LOAN_TYPE` master-data code (Module 07 Rule 4, Scenario 9).
+   *
+   * Was `@IsIn(['PERSONAL','BUSINESS','GOLD','VEHICLE'])`. The list is per-tenant
+   * master data now, so a fixed list here would refuse a type the tenant defined
+   * for itself. Only the shape is checked at this layer; that the code names an
+   * ACTIVE `LOAN_TYPE` row in *this* org is checked by `LoanProductService`,
+   * which is the only layer that can ask.
+   */
+  @IsString()
+  @Transform(trim)
+  @IsNotEmpty({ message: 'Loan Type is required' })
+  @MaxLength(50)
+  @Matches(/^[A-Z][A-Z0-9_]*$/, { message: 'Loan Type is required' })
+  loanType!: string;
 }

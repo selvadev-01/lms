@@ -34,12 +34,27 @@ import { optionalText } from "./primitives";
  *    "X is required" rather than a length complaint about an empty string.
  */
 
-export const loanTypeSchema = z.enum(
-  ["PERSONAL", "BUSINESS", "GOLD", "VEHICLE"],
-  {
-    errorMap: () => ({ message: "Loan Type is required" }),
-  },
-);
+/**
+ * A `LOAN_TYPE` master-data code.
+ *
+ * This was `z.enum(["PERSONAL","BUSINESS","GOLD","VEHICLE"])` — the four types
+ * the codebase happened to know about. It is now an open code string, because
+ * the list is admin-managed per tenant and a compiled-in enum cannot name a type
+ * a tenant invents. The set of *valid* codes is whatever that tenant's
+ * `LOAN_TYPE` rows say, which only the API can check, so it does so on write.
+ *
+ * The shape is still constrained to the master-data code character class, so a
+ * malformed value is refused here rather than reaching a lookup that would
+ * merely fail to match. `.min(1)` leads so an untouched select reports "Loan
+ * Type is required" instead of a regex complaint — `required_error` alone does
+ * not fire for `""`, which is what an unselected `<select>` submits.
+ */
+export const loanTypeSchema = z
+  .string({ required_error: "Loan Type is required" })
+  .trim()
+  .min(1, "Loan Type is required")
+  .max(50, "Loan Type must be 50 characters or fewer")
+  .regex(/^[A-Z][A-Z0-9_]*$/, "Loan Type is required");
 
 export const interestTypeSchema = z.enum(["FLAT", "REDUCING", "CUSTOM_RATE"], {
   errorMap: () => ({ message: "Interest Type is required" }),
@@ -95,12 +110,29 @@ export const applicationStatusSchema = z.enum([
  * drifting apart. The labels are the wording already in use in `LoanBadges.tsx`,
  * moved here so badges and dropdowns cannot disagree.
  */
-export const LOAN_TYPE_OPTIONS = optionsFrom(loanTypeSchema.options, {
-  PERSONAL: "Personal",
-  BUSINESS: "Business",
-  GOLD: "Gold",
-  VEHICLE: "Vehicle",
-});
+/**
+ * The loan types every tenant starts with — a *fallback*, not the list.
+ *
+ * Loan types are master data now, so the authoritative list for a tenant comes
+ * from the API and may contain codes this file has never heard of. These four
+ * are the ones the migration seeds, and they remain here for one job only:
+ * turning a stored code into a readable label on screens that render a saved
+ * application without fetching the option list (`labelFor` falls back to the
+ * code itself for anything absent, so a tenant-defined type still displays,
+ * just as its code).
+ *
+ * Do NOT use this to populate a Loan Type dropdown — that must come from the
+ * API, or a tenant's own types are silently unofferable.
+ */
+export const LOAN_TYPE_OPTIONS = optionsFrom(
+  ["PERSONAL", "BUSINESS", "GOLD", "VEHICLE"] as const,
+  {
+    PERSONAL: "Personal",
+    BUSINESS: "Business",
+    GOLD: "Gold",
+    VEHICLE: "Vehicle",
+  },
+);
 
 export const INTEREST_TYPE_OPTIONS = optionsFrom(interestTypeSchema.options, {
   FLAT: "Flat",
@@ -328,10 +360,56 @@ export const setLoanConfigStatusSchema = z.object({
   expectedVersion: expectedVersionSchema,
 });
 
-export const createSchemeDurationSchema = z.object({
-  frequency: repaymentFrequencySchema,
-  durationCount: durationCountSchema,
-});
+/**
+ * A repayment option a scheme offers.
+ *
+ * The optional bounds turn one row into a range of accepted counts, for a term
+ * the borrower states rather than picks — a daily loan runs to a date, so its
+ * count is whatever those dates imply. Both or neither: one alone would behave
+ * as an exact term while looking like a range, so the refinement below refuses
+ * it rather than letting the admin believe a range was saved. The API repeats
+ * every rule here, and the database repeats them again as a CHECK constraint.
+ */
+export const createSchemeDurationSchema = z
+  .object({
+    frequency: repaymentFrequencySchema,
+    durationCount: durationCountSchema,
+    minDurationCount: durationCountSchema.optional(),
+    maxDurationCount: durationCountSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    const { minDurationCount: min, maxDurationCount: max } = value;
+
+    if (min === undefined && max === undefined) return;
+
+    if (min === undefined || max === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [min === undefined ? "minDurationCount" : "maxDurationCount"],
+        message: "Give both a minimum and a maximum duration, or neither",
+      });
+      return;
+    }
+
+    if (min > max) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maxDurationCount"],
+        message: "Minimum duration cannot exceed the maximum",
+      });
+      return;
+    }
+
+    // The default is what the application form pre-fills; outside its own range
+    // it would offer a value the submit gate then refuses.
+    if (value.durationCount < min || value.durationCount > max) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["durationCount"],
+        message: "Default duration must fall within the minimum and maximum",
+      });
+    }
+  });
 
 export const updateSchemeDurationSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"], {
@@ -369,6 +447,49 @@ export const createLoanApplicationSchema = z.object({
   repaymentFrequency: repaymentFrequencySchema,
   durationCount: durationCountSchema,
 });
+
+/**
+ * The wizard's steps, as slices of the schema above.
+ *
+ * `.pick()` rather than fresh schemas, so there is one definition of what a
+ * valid amount or duration is. The wizard's Next button and the server action
+ * that finally creates the row then move together: change a bound in
+ * `createLoanApplicationSchema` and both enforce the new one. Hand-written
+ * per-step booleans — which is what the wizard used to carry — drift the moment
+ * a rule changes, and drift *silently*, because the server still rejects what
+ * the client waved through.
+ *
+ * The fourth step (EMI preview) has no fields of its own: it gates on the
+ * server having actually returned a schedule, which no schema can express.
+ *
+ * Client-side these are error *prevention*. The server still validates the
+ * whole `createLoanApplicationSchema` on submit — a step slice passing is not
+ * permission to skip that.
+ */
+export const loanApplicationStepSchemas = {
+  customer: createLoanApplicationSchema.pick({ customerId: true }),
+  details: createLoanApplicationSchema.pick({
+    requestedAmountPaise: true,
+    purpose: true,
+  }),
+  terms: createLoanApplicationSchema.pick({
+    loanSchemeId: true,
+    interestType: true,
+    interestRateBps: true,
+    repaymentFrequency: true,
+    durationCount: true,
+  }),
+} as const;
+
+/** Step order. The URL carries these slugs, so they are a public contract. */
+export const LOAN_APPLICATION_STEPS = [
+  "customer",
+  "details",
+  "terms",
+  "preview",
+] as const;
+
+export type LoanApplicationStep = (typeof LOAN_APPLICATION_STEPS)[number];
 
 /**
  * Draft edits. The customer is absent: changing who an application is for turns

@@ -280,9 +280,18 @@ export async function addSchemeDurationAction(
     return { message: UNAVAILABLE };
   }
 
+  // Blank means "no range", not zero — an empty input must not coerce to a
+  // bound, which would turn every fixed term into a range starting at 0.
+  const optionalCount = (name: string) => {
+    const raw = formData.get(name);
+    return raw === null || raw === "" ? {} : { [name]: raw };
+  };
+
   const parsed = createSchemeDurationSchema.safeParse({
     frequency: formData.get("frequency"),
     durationCount: formData.get("durationCount"),
+    ...optionalCount("minDurationCount"),
+    ...optionalCount("maxDurationCount"),
   });
 
   if (!parsed.success) {

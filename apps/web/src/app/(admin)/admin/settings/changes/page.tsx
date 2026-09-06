@@ -49,7 +49,10 @@ export default async function ConfigurationChangesPage({
         <ChangeRequestList
           changes={changes.status === "ok" ? changes.changes : []}
           loadError={changes.status !== "ok"}
-          canApprove={hasPermissions(user, PERMISSIONS.SETTINGS_CHANGES_APPROVE)}
+          canApprove={hasPermissions(
+            user,
+            PERMISSIONS.SETTINGS_CHANGES_APPROVE,
+          )}
           currentUserId={user.id}
         />
       </div>

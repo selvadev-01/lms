@@ -5,6 +5,7 @@
   "description": "Tailwind v4 design tokens — the single source of truth for colour, type, and spacing across all apps.",
   "exports": {
     "./theme.css": "./src/theme.css",
+    "./semantic.css": "./src/semantic.css",
     "./utilities.css": "./src/utilities.css"
   },
   "files": [

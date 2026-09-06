@@ -1,6 +1,6 @@
 # Enterprise Base Guide
 
-How to turn this TailAdmin template into the starting point for an enterprise application.
+How the LMS admin base was assembled from a third-party Next.js dashboard template, and how to repeat that prune against a newer upstream release.
 
 **Working model:** fork in place. Delete what you don't want, add the base essentials, then copy the folder and start building. Phases 1 and 2 are the "copy this and go" boundary. Phase 3 is reference material you consult as the app grows.
 
@@ -9,11 +9,11 @@ How to turn this TailAdmin template into the starting point for an enterprise ap
 > ## ✅ Phases 1 and 2 are already applied to this repo
 >
 > This repo **is** the cleaned base. `lint`, `typecheck`, `build`, 3 unit tests and
-> 3 e2e tests all pass; zero "TailAdmin" strings remain. Copy this folder and start
+> 3 e2e tests all pass; no upstream branding remains. Copy this folder and start
 > building — you do not need to re-run Phase 1 or 2.
 >
 > They are documented below so you know **what was changed and why**, and so you
-> can repeat the process against a newer upstream TailAdmin release.
+> can repeat the process against a newer upstream template release.
 >
 > **One step did not get applied** — the ESLint feature-boundary rule in §2.1.
 > A `config-protection` hook blocks edits to `eslint.config.mjs`. Add it by hand
@@ -27,7 +27,7 @@ How to turn this TailAdmin template into the starting point for an enterprise ap
 
 ## What you are inheriting
 
-TailAdmin free Next.js admin dashboard **v2.3.0** — Next 16.1.6, React 19.2, Tailwind v4, TypeScript strict, App Router.
+A free Next.js admin dashboard template **v2.3.0** — Next 16.1.6, React 19.2, Tailwind v4, TypeScript strict, App Router.
 
 | Ships working                                   | Is a mockup                                         |
 | ----------------------------------------------- | --------------------------------------------------- |
@@ -50,7 +50,7 @@ Goal: a repo that builds clean, with no demo code and no third-party branding.
 ## 1.1 Project identity
 
 ```bash
-git init && git add -A && git commit -m "chore: pristine TailAdmin v2.3.0 baseline"
+git init && git add -A && git commit -m "chore: pristine template v2.3.0 baseline"
 ```
 
 Commit the untouched baseline first. Every later diff then shows exactly what your project changed.
@@ -61,11 +61,11 @@ Then:
 - Add `.nvmrc`.
 - Delete `.idea/` and root `banner.png`.
 - Delete `.eslintrc.json` — dead legacy config that coexists with `eslint.config.mjs` and confuses tooling.
-- Replace `README.md` wholesale — it is entirely TailAdmin marketing.
+- Replace `README.md` wholesale — it is entirely upstream marketing.
 
 ## 1.2 De-brand
 
-**39 occurrences of "TailAdmin" across 20 files.** Don't find-and-replace them — remove them structurally.
+**39 occurrences of the vendor name across 20 files.** Don't find-and-replace them — remove them structurally.
 
 ### The leverage move
 
@@ -93,13 +93,13 @@ Pages to update follow one pattern; representative paths:
 
 ### The rest of the checklist
 
-- **Delete [src/layout/SidebarWidget.tsx](src/layout/SidebarWidget.tsx)** — an "Upgrade To Pro" ad card linking to `tailadmin.com/pricing`. Remove its render site in [src/layout/AppSidebar.tsx](src/layout/AppSidebar.tsx).
+- **Delete [src/layout/SidebarWidget.tsx](src/layout/SidebarWidget.tsx)** — an "Upgrade To Pro" ad card linking to the vendor's pricing page. Remove its render site in [src/layout/AppSidebar.tsx](src/layout/AppSidebar.tsx).
 - Remove the `pro?: boolean` / `new?: boolean` upsell flags from the nav item type in `AppSidebar.tsx`.
 - Replace `public/images/logo/{auth-logo,logo,logo-dark,logo-icon}.svg`, `public/images/favicon.ico`, `src/app/favicon.ico`.
 - [src/app/(full-width-pages)/(auth)/layout.tsx](<src/app/(full-width-pages)/(auth)/layout.tsx>) — replace the tagline, **and fix `src="./images/..."` → `/images/...`**. The relative path resolves differently depending on route depth; it works by accident today.
 - Footer credits: [src/app/(full-width-pages)/(error-pages)/error-404/page.tsx:50](<src/app/(full-width-pages)/(error-pages)/error-404/page.tsx#L50>) and [src/app/not-found.tsx:43](src/app/not-found.tsx#L43).
 
-Verify when done: `grep -ri tailadmin src/ public/ README.md` returns nothing.
+Verify when done: a case-insensitive grep for the vendor name across `src/`, `public/` and `README.md` returns nothing.
 
 ## 1.3 Delete demo code
 
@@ -218,7 +218,7 @@ rules: {
 npm run lint && npm run typecheck && npm run build   # ✅ pass, 13 static routes
 npm test                                             # ✅ 3/3 unit tests
 npm run test:e2e                                     # ✅ 3/3 e2e tests
-grep -ri tailadmin src/ public/                      # ✅ no output
+grep -ri "<vendor name>" src/ public/                # ✅ no output
 ```
 
 At that point, copy the folder and start building features.
@@ -373,7 +373,7 @@ Paste into the first issue of each new project.
 - [ ] Uninstall released deps + **remove the `overrides` block** (keep `flatpickr`)
 - [ ] Prune the matching `globals.css` override sections
 - [ ] Fix: duplicate ThemeProvider, dark-mode flash, `/reset-password`, `@tailwindcss/forms`, Prettier
-- [ ] `grep -ri tailadmin src/ public/` returns nothing
+- [ ] a case-insensitive grep for the vendor name across `src/` and `public/` returns nothing
 
 **Phase 2 — Base**
 

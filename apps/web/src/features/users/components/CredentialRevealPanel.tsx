@@ -110,7 +110,9 @@ export default function CredentialRevealPanel({
 
       <div className="flex justify-end">
         <Link href={returnHref}>
-          <Button size="sm">{returnLabel}</Button>
+          <Button type="button" size="sm">
+            {returnLabel}
+          </Button>
         </Link>
       </div>
     </div>

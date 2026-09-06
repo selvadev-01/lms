@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { requireSession } from "@/features/auth/api/session";
-import { fetchNotification, NotificationDetail } from "@/features/notifications";
+import {
+  fetchNotification,
+  NotificationDetail,
+} from "@/features/notifications";
 
 export const metadata: Metadata = { title: "Notification" };
 export const dynamic = "force-dynamic";

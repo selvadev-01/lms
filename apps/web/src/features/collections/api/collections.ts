@@ -54,12 +54,22 @@ export type CollectionLedgerResult =
 export type CollectionPreviewResult =
   { status: "ok"; preview: AllocationPreview } | FetchFailure;
 
+/**
+ * The API's own default, mirrored so the page's control matches what the
+ * server returned. Until `page` was forwarded, the list showed the first 20
+ * rows of a larger set with no sign there were more — `total` came back and
+ * was discarded.
+ */
+export const COLLECTIONS_PAGE_SIZE = 20;
+
 export async function fetchCollections(params?: {
   search?: string;
   status?: string;
   loanId?: string;
   fromDate?: string;
   toDate?: string;
+  page?: number;
+  pageSize?: number;
 }): Promise<CollectionListResult> {
   const query = new URLSearchParams();
   if (params?.search) query.set("search", params.search);
@@ -67,6 +77,8 @@ export async function fetchCollections(params?: {
   if (params?.loanId) query.set("loanId", params.loanId);
   if (params?.fromDate) query.set("fromDate", params.fromDate);
   if (params?.toDate) query.set("toDate", params.toDate);
+  if (params?.page && params.page > 1) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
 

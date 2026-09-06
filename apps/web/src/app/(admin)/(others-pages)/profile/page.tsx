@@ -11,7 +11,7 @@ export const metadata: Metadata = {
  * The signed-in user's own profile.
  *
  * A server component reading the real session, where it was a client component
- * rendering a hardcoded fictional person from the TailAdmin template.
+ * rendering a hardcoded fictional person from the original scaffold.
  *
  * `requireSession()` is the authorization boundary, not the proxy: the proxy
  * only checks that a session cookie is present, which is a UX redirect. This

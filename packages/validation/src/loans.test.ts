@@ -9,6 +9,8 @@ import {
   emiPreviewSchema,
   expectedVersionSchema,
   listLoanApplicationsSchema,
+  LOAN_APPLICATION_STEPS,
+  loanApplicationStepSchemas,
   modifyTermsSchema,
   recordCreditAssessmentSchema,
   rejectApplicationSchema,
@@ -295,17 +297,34 @@ describe("product and scheme codes", () => {
     },
   );
 
-  it("rejects a loan type outside the four allowed", () => {
-    // Scenario 9.
+  // Loan types are per-tenant master data, so this schema no longer knows the
+  // valid set — a tenant may define "AGRICULTURE" for itself. Only the shape is
+  // checked here; that the code names an ACTIVE LOAN_TYPE row in this org is
+  // checked by the API, which is the only layer that can ask.
+  it("accepts a tenant-defined loan type", () => {
     const parsed = createLoanProductSchema.safeParse({
       code: "AGRI-01",
       name: "Agriculture",
       loanType: "AGRICULTURE",
     });
-    expect(parsed.success).toBe(false);
-    expect(parsed.error?.flatten().fieldErrors.loanType?.[0]).toBe(
-      "Loan Type is required",
-    );
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a malformed loan type", () => {
+    // Scenario 9, as far as this layer can still enforce it: a value that could
+    // not be a master-data code is refused here rather than reaching a lookup
+    // that would merely fail to match.
+    for (const loanType of ["personal", "GOLD LOAN", "1ST", ""]) {
+      const parsed = createLoanProductSchema.safeParse({
+        code: "AGRI-01",
+        name: "Agriculture",
+        loanType,
+      });
+      expect(parsed.success).toBe(false);
+      expect(parsed.error?.flatten().fieldErrors.loanType?.[0]).toBe(
+        "Loan Type is required",
+      );
+    }
   });
 });
 
@@ -413,5 +432,74 @@ describe("Module 08 — sanction", () => {
     ]) {
       expect(applicationStatusSchema.safeParse(status).success).toBe(true);
     }
+  });
+});
+
+describe("loan application wizard steps", () => {
+  it("covers every field of the create schema exactly once", () => {
+    // The point of `.pick()` is that the wizard cannot drift from the schema
+    // the server enforces. If a field is added to `createLoanApplicationSchema`
+    // and not to a step, the wizard would never collect it and every submission
+    // would fail server-side with an error the user cannot act on.
+    const stepFields = Object.values(loanApplicationStepSchemas).flatMap(
+      (schema) => Object.keys(schema.shape),
+    );
+    const createFields = Object.keys(createLoanApplicationSchema.shape);
+
+    expect([...stepFields].sort()).toEqual([...createFields].sort());
+    // No field collected twice, which would put one answer on two steps.
+    expect(new Set(stepFields).size).toBe(stepFields.length);
+  });
+
+  it("orders the steps to match the URL contract", () => {
+    // These slugs appear in the address bar, so reordering or renaming one
+    // breaks every link anybody has saved.
+    expect(LOAN_APPLICATION_STEPS).toEqual([
+      "customer",
+      "details",
+      "terms",
+      "preview",
+    ]);
+  });
+
+  it("gives the preview step no fields of its own", () => {
+    // It gates on the server returning a schedule, which no schema expresses.
+    expect(Object.keys(loanApplicationStepSchemas)).not.toContain("preview");
+  });
+
+  it("accepts a valid slice and rejects an incomplete one per step", () => {
+    const application = validApplication();
+
+    expect(
+      loanApplicationStepSchemas.customer.safeParse(application).success,
+    ).toBe(true);
+    expect(
+      loanApplicationStepSchemas.details.safeParse(application).success,
+    ).toBe(true);
+    expect(
+      loanApplicationStepSchemas.terms.safeParse(application).success,
+    ).toBe(true);
+
+    // A step must refuse its own missing field...
+    expect(
+      loanApplicationStepSchemas.customer.safeParse({ customerId: "" }).success,
+    ).toBe(false);
+    // ...and must not care about fields belonging to a later step, or the user
+    // could never get past step one.
+    expect(
+      loanApplicationStepSchemas.customer.safeParse({
+        customerId: application.customerId,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("inherits the base schema's rules rather than restating them", () => {
+    // A fractional amount is rejected by the shared paise rule, not by anything
+    // the step slice adds — this is the guarantee `.pick()` buys.
+    const parsed = loanApplicationStepSchemas.details.safeParse({
+      requestedAmountPaise: "1000.50",
+      purpose: "Working capital",
+    });
+    expect(parsed.success).toBe(false);
   });
 });

@@ -30,6 +30,7 @@ import {
   CUSTOMERS_CONVERT_PERMISSION,
   CUSTOMERS_CREATE_PERMISSION,
   CUSTOMERS_DELETE_PERMISSION,
+  CUSTOMERS_MOBILE_VERIFY_PERMISSION,
   CUSTOMERS_UPDATE_PERMISSION,
   CUSTOMERS_VIEW_PERMISSION,
   CustomerService,
@@ -210,13 +211,18 @@ export class CustomerController {
   /**
    * LOCAL mobile verification (Scenarios 2, 14).
    *
-   * Gated on `customers.update` rather than a permission of its own: verifying a
-   * customer's number is part of completing their record, and a caller who may
-   * edit the customer may complete them. A separate code would be one more thing
-   * to forget to grant, for no additional control.
+   * Gated on `customers.mobile.verify`, its own code since Q-CUST-23. It was
+   * `customers.update` on the reasoning that a caller who may edit a customer
+   * may complete them — true, but the converse turned out to matter more: a
+   * field agent registers customers and verifies their numbers without ever
+   * being able to edit one, and reusing the edit permission would have handed
+   * them that too.
+   *
+   * Note this permission now also activates a PENDING LOCAL customer, since
+   * verification is what completes them — see `CustomerMobileService.verifyOtp`.
    */
   @Post(':customerId/mobile/send-otp')
-  @RequirePermissions(CUSTOMERS_UPDATE_PERMISSION)
+  @RequirePermissions(CUSTOMERS_MOBILE_VERIFY_PERMISSION)
   @HttpCode(202)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async sendMobileOtp(
@@ -230,7 +236,7 @@ export class CustomerController {
   }
 
   @Post(':customerId/mobile/verify-otp')
-  @RequirePermissions(CUSTOMERS_UPDATE_PERMISSION)
+  @RequirePermissions(CUSTOMERS_MOBILE_VERIFY_PERMISSION)
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async verifyMobileOtp(

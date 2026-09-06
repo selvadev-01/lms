@@ -75,7 +75,13 @@ test("Branch Admin signs in and reaches the branch dashboard", async ({
   await signIn(page, "9000000003");
 
   await expect(page).toHaveURL(/\/branch/);
-  await expect(page.getByText(/Branch Admin B/)).toBeVisible();
+  // The signed-in name appears twice — the header's user chip and this
+  // heading — so a bare text match resolves to two elements and trips strict
+  // mode. Anchor on the heading, which is the assertion that actually matters:
+  // the branch dashboard greeted *this* user.
+  await expect(
+    page.getByRole("heading", { name: "Welcome, Branch Admin B" }),
+  ).toBeVisible();
 });
 
 test("wrong credentials show the generic failure and create no session", async ({

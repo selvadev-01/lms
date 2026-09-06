@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -42,4 +43,16 @@ export class UpdateMasterDataValueDto {
   @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])
   status?: 'ACTIVE' | 'INACTIVE';
+
+  /**
+   * LOAN_TYPE only — see `CreateMasterDataValueDto`.
+   *
+   * Editable, unlike `code`: a type marked secured by mistake must be
+   * correctable, and unlike a code this changes no stored business value. It
+   * only changes which documents *future* submissions require; applications
+   * already submitted were gated against the flag as it stood then.
+   */
+  @IsOptional()
+  @IsBoolean()
+  requiresCollateral?: boolean;
 }

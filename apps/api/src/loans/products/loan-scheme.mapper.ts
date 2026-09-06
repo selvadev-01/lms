@@ -26,6 +26,9 @@ export type LoanSchemeDurationRow = {
   loanSchemeDurationId: string;
   frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
   durationCount: number;
+  /** Both null for an exact term; both set for a range. See `termIsOffered`. */
+  minDurationCount: number | null;
+  maxDurationCount: number | null;
   status: 'ACTIVE' | 'INACTIVE';
 };
 
@@ -53,6 +56,11 @@ export function toDurationOption(
     loanSchemeDurationId: row.loanSchemeDurationId,
     frequency: row.frequency,
     durationCount: row.durationCount,
+    // Carried through so the application form knows whether to render a picklist
+    // or a bounded number input — the difference between a published term and
+    // one the borrower states.
+    minDurationCount: row.minDurationCount,
+    maxDurationCount: row.maxDurationCount,
     status: row.status,
   };
 }

@@ -64,7 +64,7 @@ function describeDevice(userAgent: string | null): string {
 function RevokeButton({ isCurrent }: { isCurrent: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" variant="outline" disabled={pending}>
+    <Button type="submit" size="sm" variant="outline" disabled={pending}>
       {pending ? "Ending…" : isCurrent ? "Sign out" : "End session"}
     </Button>
   );
@@ -73,7 +73,7 @@ function RevokeButton({ isCurrent }: { isCurrent: boolean }) {
 function RevokeAllButton() {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" variant="outline" disabled={pending}>
+    <Button type="submit" size="sm" variant="outline" disabled={pending}>
       {pending ? "Signing out…" : "Sign out everywhere else"}
     </Button>
   );

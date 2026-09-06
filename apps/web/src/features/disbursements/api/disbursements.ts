@@ -97,13 +97,25 @@ export async function fetchDisbursalQueue(): Promise<DisbursalQueueResult> {
     : result;
 }
 
+/**
+ * The API's own default, mirrored here so the page can render a control that
+ * matches what the server actually returned. Until `page`/`pageSize` were
+ * forwarded, the list silently showed the first 25 rows of a larger set with
+ * no indication there were more — the `total` was fetched and then ignored.
+ */
+export const DISBURSEMENTS_PAGE_SIZE = 25;
+
 export async function fetchDisbursements(params?: {
   search?: string;
   status?: string;
+  page?: number;
+  pageSize?: number;
 }): Promise<DisbursementListResult> {
   const query = new URLSearchParams();
   if (params?.search) query.set("search", params.search);
   if (params?.status) query.set("status", params.status);
+  if (params?.page && params.page > 1) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
 

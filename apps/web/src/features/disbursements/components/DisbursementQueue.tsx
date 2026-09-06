@@ -1,7 +1,7 @@
 "use client";
 
 import type { DisbursalQueueItem, DisbursementSummary } from "@lms/types";
-import { Alert, Button } from "@lms/ui";
+import { Alert, Button, Pagination } from "@lms/ui";
 import { DISBURSEMENT_STATUS_OPTIONS } from "@lms/validation";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -36,6 +36,9 @@ export default function DisbursementQueue({
   listError = false,
   initialSearch = "",
   initialStatus = "",
+  page = 1,
+  pageSize = 25,
+  total = 0,
 }: {
   queue: DisbursalQueueItem[];
   disbursements: DisbursementSummary[];
@@ -43,6 +46,10 @@ export default function DisbursementQueue({
   listError?: boolean;
   initialSearch?: string;
   initialStatus?: string;
+  page?: number;
+  pageSize?: number;
+  /** Rows matching the filters across every page, not just this one. */
+  total?: number;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -54,6 +61,18 @@ export default function DisbursementQueue({
     );
   }
 
+  /**
+   * Changing a filter returns to the first page.
+   *
+   * Otherwise someone on page 3 who narrows the search lands on page 3 of a
+   * result set that may only have one page, sees nothing, and concludes the
+   * search found no matches.
+   */
+  function pushFiltered(next: URLSearchParams) {
+    next.delete("page");
+    push(next);
+  }
+
   function search(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const next = new URLSearchParams(params.toString());
@@ -62,7 +81,7 @@ export default function DisbursementQueue({
     if (trimmed) next.set("search", trimmed);
     else next.delete("search");
 
-    push(next);
+    pushFiltered(next);
   }
 
   function filterStatus(status: string) {
@@ -71,7 +90,15 @@ export default function DisbursementQueue({
     if (status) next.set("status", status);
     else next.delete("status");
 
-    push(next);
+    pushFiltered(next);
+  }
+
+  /** Page links keep every active filter and change only `page`. */
+  function hrefForPage(next: number) {
+    const search = new URLSearchParams(params.toString());
+    if (next <= 1) search.delete("page");
+    else search.set("page", String(next));
+    return `/loans/disbursements${search.size > 0 ? `?${search.toString()}` : ""}`;
   }
 
   /** Loans with no disbursement scheduled yet — the real action queue. */
@@ -146,7 +173,9 @@ export default function DisbursementQueue({
                       <Link
                         href={`/loans/disbursements/new?applicationId=${encodeURIComponent(item.applicationId)}`}
                       >
-                        <Button size="sm">Schedule</Button>
+                        <Button type="button" size="sm">
+                          Schedule
+                        </Button>
                       </Link>
                     </td>
                   </tr>
@@ -173,7 +202,9 @@ export default function DisbursementQueue({
               aria-label="Search disbursements"
               className="shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30"
             />
-            <Button size="sm">Search</Button>
+            <Button type="submit" size="sm">
+              Search
+            </Button>
           </form>
 
           <div className="flex items-center gap-2">
@@ -270,6 +301,20 @@ export default function DisbursementQueue({
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* Only once there is more than a page of them. The API has always
+            paginated this list at 25; until the page param was forwarded the
+            extra rows were simply unreachable and unmentioned. */}
+        {!listError && total > pageSize && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            hrefFor={hrefForPage}
+            linkComponent={Link}
+            className="mt-4"
+          />
         )}
       </section>
     </div>

@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* NOTE: the semantic layer (`@lms/design-tokens/semantic.css`) is imported by
+   the consuming app next to this file, not from here. Turbopack does not
+   resolve a relative `@import` across the package boundary the way the webpack
+   build does, so a self-import here compiles in `next build` but breaks
+   `next dev`. Keep both imports side by side in the app's globals.css. */
+
 @theme {
   --font-*: initial;
   --font-outfit: Outfit, sans-serif;
@@ -39,18 +45,33 @@
   --color-white: #ffffff;
   --color-black: #101828;
 
-  --color-brand-25: #f2f7ff;
-  --color-brand-50: #ecf3ff;
-  --color-brand-100: #dde9ff;
-  --color-brand-200: #c2d6ff;
-  --color-brand-300: #9cb9ff;
-  --color-brand-400: #7592ff;
-  --color-brand-500: #465fff;
-  --color-brand-600: #3641f5;
-  --color-brand-700: #2a31d8;
-  --color-brand-800: #252dae;
-  --color-brand-900: #262e89;
-  --color-brand-950: #161950;
+  /* The "Calm Institutional" accent: a deep teal, re-pointed from the
+     inherited TailAdmin indigo (#465fff at 500).
+
+     Re-pointed rather than replaced name-by-name, so all ~99 screens — the
+     sidebar's `menu-item-active`, every unconverted page, every `brand-*`
+     utility — adopt the new accent at once instead of the app looking half
+     redesigned. The scale keeps the same 25→950 shape and comparable
+     lightness at each stop, so existing tint pairings (`bg-brand-50` under
+     `text-brand-500`, and so on) keep their contrast relationship.
+
+     NOTE: four places hardcode the old hex and cannot follow a token —
+     `globals.css` (flatpickr selected day + range shadow),
+     `global-error.tsx` (inline style, renders when the app has failed) and
+     `BarChartOne.tsx` (ApexCharts series). They are updated alongside this
+     ramp; grep for the literal before changing it again. */
+  --color-brand-25: #f2fbfa;
+  --color-brand-50: #e6f6f4;
+  --color-brand-100: #c7ebe6;
+  --color-brand-200: #96dbd3;
+  --color-brand-300: #5cc3b8;
+  --color-brand-400: #2ea69a;
+  --color-brand-500: #0f8a80;
+  --color-brand-600: #0b6f68;
+  --color-brand-700: #0b5a55;
+  --color-brand-800: #0d4845;
+  --color-brand-900: #0d3b39;
+  --color-brand-950: #042322;
 
   --color-blue-light-25: #f5fbff;
   --color-blue-light-50: #f0f9ff;
@@ -189,6 +210,10 @@
     cursor: pointer;
   }
   body {
-    @apply font-outfit relative z-1 bg-gray-50 font-normal;
+    /* `bg-canvas` resolves to #f7f8fa light / #0b1020 dark. In light mode this
+       is a hair off the previous bg-gray-50 (#f9fafb) and imperceptible on the
+       ~70 not-yet-converted pages; in dark it now comes from the token instead
+       of a per-page `dark:` class. */
+    @apply font-outfit bg-canvas relative z-1 font-normal;
   }
 }

@@ -10,6 +10,7 @@ import type { RequestMeta } from '../../auth/auth.service';
 import type { AuthContext } from '../../common/auth-context';
 import { GuarantorService } from '../../customers/guarantor/guarantor.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { termIsOffered } from '../products/loan-scheme.service';
 import {
   toEmiView,
   toIsoDate,
@@ -26,10 +27,36 @@ import {
  * the case it exists to stop.
  */
 const BASE_REQUIRED_DOCUMENTS = ['ID', 'INCOME'] as const;
-const COLLATERAL_LOAN_TYPES = new Set(['GOLD', 'VEHICLE']);
 
-export function requiredDocumentTypes(loanType: string): string[] {
-  return COLLATERAL_LOAN_TYPES.has(loanType)
+/**
+ * Whether a loan type is secured, read from its master-data row.
+ *
+ * This used to be `COLLATERAL_LOAN_TYPES = new Set(['GOLD','VEHICLE'])`. Once a
+ * tenant can define its own loan types that set is no longer able to answer the
+ * question — it has never heard of the type — so the answer lives on the
+ * `LOAN_TYPE` row as `requiresCollateral`.
+ *
+ * **A missing or unreadable row means "not secured".** That is the same answer
+ * the hardcoded set gave for any type outside the two it named, so no existing
+ * product's requirements change. It is also the safe direction for a *gate*:
+ * this decides what blocks submission, and inventing a requirement no admin
+ * configured would make an application permanently unsubmittable with nothing on
+ * screen explaining which document is wanted. An under-strict gate is visible
+ * and correctable; an over-strict one on a type nobody can edit is a dead end.
+ */
+export async function requiredDocumentTypes(
+  tx: Pick<PrismaService, 'masterDataValue'>,
+  orgId: string,
+  loanType: string,
+): Promise<string[]> {
+  const row = await tx.masterDataValue.findUnique({
+    where: {
+      orgId_category_code: { orgId, category: 'LOAN_TYPE', code: loanType },
+    },
+    select: { requiresCollateral: true },
+  });
+
+  return row?.requiresCollateral === true
     ? [...BASE_REQUIRED_DOCUMENTS, 'COLLATERAL']
     : [...BASE_REQUIRED_DOCUMENTS];
 }
@@ -87,6 +114,9 @@ export class LoanApplicationCompletenessService {
       | 'loanSchemeDuration'
       | 'loanApplicationDocument'
       | 'customer'
+      // Reached by `missingDocuments`, to learn whether this application's loan
+      // type is secured — that answer is master data now, not a constant.
+      | 'masterDataValue'
     >,
     application: ApplicationWithRelations,
     guarantorsReady: { satisfied: boolean; blockers: unknown[] },
@@ -144,6 +174,9 @@ export class LoanApplicationCompletenessService {
         status: string;
         frequency: string;
         durationCount: number;
+        // Null for an exact term; set when the row describes a range.
+        minDurationCount: number | null;
+        maxDurationCount: number | null;
       }[];
     } | null;
 
@@ -159,11 +192,12 @@ export class LoanApplicationCompletenessService {
     } else {
       pass('SCHEME_ACTIVE');
 
-      const supported = typedScheme.durations.some(
-        (duration) =>
-          duration.status === 'ACTIVE' &&
-          duration.frequency === application.repaymentFrequency &&
-          duration.durationCount === application.durationCount,
+      // The same helper the submit gate uses, not a second copy of the rule:
+      // this screen's green tick must mean exactly what submit will decide.
+      const supported = termIsOffered(
+        typedScheme.durations,
+        application.repaymentFrequency,
+        application.durationCount,
       );
 
       if (supported) {
@@ -274,10 +308,14 @@ export class LoanApplicationCompletenessService {
    * upload is Q-APP-157, and is left to the approver's judgement.
    */
   async missingDocuments(
-    tx: Pick<PrismaService, 'loanApplicationDocument'>,
+    tx: Pick<PrismaService, 'loanApplicationDocument' | 'masterDataValue'>,
     application: ApplicationWithRelations,
   ): Promise<string[]> {
-    const required = requiredDocumentTypes(application.loanProduct.loanType);
+    const required = await requiredDocumentTypes(
+      tx,
+      application.orgId,
+      application.loanProduct.loanType,
+    );
 
     const rows = await tx.loanApplicationDocument.findMany({
       where: {

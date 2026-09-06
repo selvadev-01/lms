@@ -53,10 +53,10 @@ pnpm dev
 
 Turbo starts both apps:
 
-| App | URL |
-|---|---|
-| Web (Next.js 16) | http://localhost:3000 |
-| API (NestJS) | http://localhost:3001, routes under `/api/v1` |
+| App              | URL                                           |
+| ---------------- | --------------------------------------------- |
+| Web (Next.js 16) | http://localhost:3000                         |
+| API (NestJS)     | http://localhost:3001, routes under `/api/v1` |
 
 To run one only: `pnpm --filter @lms/web dev` / `pnpm --filter @lms/api dev`.
 
@@ -66,11 +66,11 @@ Sign-in is **Organization Code + Mobile Number + Password**. There are no email 
 
 Seeded organization: **`DEMO`**. Shared password for every seeded account: **`Kestrel7Vault`**.
 
-| Role | Org code | Mobile | Scope |
-|---|---|---|---|
-| Super Admin | `DEMO` | `9000000001` | Organization-wide. Holds every permission except `field.checkin`, `recovery.writeoff.post`, and `retention.purge.run` (deliberately withheld). |
-| Branch Admin | `DEMO` | `9000000002` | Branch `BR001` only. Reads most surfaces; most mutations are refused. |
-| Field Employee | `DEMO` | `9000000004` | Branch `BR001`. Collections, cash handovers, GPS check-in. |
+| Role           | Org code | Mobile       | Scope                                                                                                                                          |
+| -------------- | -------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Super Admin    | `DEMO`   | `9000000001` | Organization-wide. Holds every permission except `field.checkin`, `recovery.writeoff.post`, and `retention.purge.run` (deliberately withheld). |
+| Branch Admin   | `DEMO`   | `9000000002` | Branch `BR001` only. Reads most surfaces; most mutations are refused.                                                                          |
+| Field Employee | `DEMO`   | `9000000004` | Branch `BR001`. Collections, cash handovers, GPS check-in.                                                                                     |
 
 Other seeded fixtures (`9000000005`–`9000000022`) exist for the e2e suite and include
 deliberately `INACTIVE`, `LOCKED`, and `PENDING` accounts. A second organization,
@@ -95,3 +95,31 @@ pnpm test:e2e          # Playwright, requires the app to be running
 
 Playwright config: `apps/web/playwright.config.ts`. Base URL `http://localhost:3000`,
 overridable with `PLAYWRIGHT_BASE_URL`.
+
+### When the suite starts failing at sign-in
+
+`change-password.spec.ts` and `recovery.spec.ts` rotate real account passwords
+and consume their fixtures. An interrupted run — or simply running one of them
+twice — leaves the account on a password nobody knows, and `db:seed` cannot
+repair it (it is idempotent, and a history depth of 5 means the seed password
+would be refused as reuse anyway).
+
+The symptom is a whole `describe.serial` block failing at its shared sign-in,
+naming a _different_ test each run. Confirm it in seconds — a 401 for the
+mutated mobile beside a 200 for the never-mutated control:
+
+```bash
+# expect 401 (broken) then 200 (control)
+curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:3001/api/v1/auth/sign-in \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' -H 'X-LMS-Request: 1' \
+  -d '{"mobile":"9000000007","password":"Kestrel7Vault","orgCode":"DEMO"}'
+```
+
+Then repair and refresh the saved sessions:
+
+```bash
+pnpm --filter @lms/api db:reset-password-fixtures
+pnpm --filter @lms/web exec playwright test --project=setup
+```
+
+This is fixture state, not a regression in whatever you last changed.

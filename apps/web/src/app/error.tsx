@@ -25,7 +25,7 @@ export default function Error({
         contact support
         {error.digest ? ` with reference ${error.digest}` : ""}.
       </p>
-      <Button onClick={reset} size="sm">
+      <Button type="button" onClick={reset} size="sm">
         Try again
       </Button>
     </div>

@@ -138,7 +138,6 @@ describe("createUserSchema", () => {
 describe("createEmployeeSchema", () => {
   const validEmployee = {
     ...validUser,
-    employeeCode: "EMP101",
     branchId: "33333333-3333-4333-8333-333333333333",
   };
 
@@ -160,18 +159,26 @@ describe("createEmployeeSchema", () => {
     }
   });
 
-  it("requires an employee code — its presence is what makes this an employee", () => {
+  /**
+   * The Employee ID is allocated by the server, so it is not an input here.
+   *
+   * Both halves matter. A client-supplied code must not reach the request body
+   * — otherwise a hand-built POST could choose its own discriminator — and its
+   * absence must not be an error, or the form that no longer collects one could
+   * never submit.
+   */
+  it("does not accept a client-supplied employee code", () => {
     const result = createEmployeeSchema.safeParse({
       ...validEmployee,
-      employeeCode: "",
+      employeeCode: "EMP101",
     });
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.flatten().fieldErrors.employeeCode).toContain(
-        "Employee ID is required",
-      );
-    }
+    expect(result.success).toBe(true);
+    if (result.success) expect("employeeCode" in result.data).toBe(false);
+  });
+
+  it("accepts an employee with no code at all", () => {
+    expect(createEmployeeSchema.safeParse(validEmployee).success).toBe(true);
   });
 });
 

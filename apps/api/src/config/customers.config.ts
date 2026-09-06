@@ -75,4 +75,21 @@ export default registerAs('customers', () => ({
    * make it guessable in an afternoon.
    */
   otpMaxAttempts: int(process.env.CUSTOMER_OTP_MAX_ATTEMPTS, 5),
+
+  /**
+   * A fixed code that always verifies, for development only.
+   *
+   * Unset by default, and the service refuses to start when it is set with
+   * `NODE_ENV=production` — the same guard `ConsoleSmsProvider` applies to
+   * itself, for the same reason: a deployment that accepts a constant OTP has
+   * no mobile verification at all, and that must fail loudly at boot rather
+   * than quietly at every customer.
+   *
+   * A real code is still minted, sent and stored on every request, so the
+   * ordinary path is exercised even while this is set; this only adds a second
+   * accepted answer. Nothing else about the flow changes, which is what keeps
+   * the development shortcut from becoming a different code path to the one
+   * production runs.
+   */
+  otpDevCode: process.env.CUSTOMER_OTP_DEV_CODE ?? null,
 }));

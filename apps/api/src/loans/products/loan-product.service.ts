@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -36,7 +37,7 @@ export type LoanProductRow = {
   loanProductId: string;
   code: string;
   name: string;
-  loanType: 'PERSONAL' | 'BUSINESS' | 'GOLD' | 'VEHICLE';
+  loanType: string;
   status: 'DRAFT' | 'ACTIVE' | 'INACTIVE';
   createdAt: Date;
   updatedAt: Date;
@@ -149,11 +150,53 @@ export class LoanProductService {
    * moment it is named would put an empty shell into the application wizard's
    * picker.
    */
+  /**
+   * Refuses a loan type that is not an ACTIVE `LOAN_TYPE` option in this org.
+   *
+   * The DTO can only check the shape of the code — loan types are per-tenant
+   * master data, so whether one *exists* is a question only the database can
+   * answer. Without this the column would accept any well-formed string, and a
+   * typo would create a product of type `PERSONNAL` that no dropdown offers and
+   * whose collateral requirement silently resolves to "not secured".
+   *
+   * INACTIVE is refused as well as absent: retiring a type is how an admin stops
+   * new products being created against it, which only works if this is the layer
+   * that enforces it. Products already carrying the type are untouched.
+   */
+  private async assertLoanTypeOffered(
+    actor: AuthContext,
+    meta: RequestMeta,
+    loanType: string,
+  ): Promise<void> {
+    const option = await this.prisma.masterDataValue.findUnique({
+      where: {
+        orgId_category_code: {
+          orgId: actor.orgId,
+          category: 'LOAN_TYPE',
+          code: loanType,
+        },
+      },
+      select: { status: true },
+    });
+
+    if (option?.status === 'ACTIVE') return;
+
+    await this.recordRejection(actor, meta, 'UNKNOWN_LOAN_TYPE', {
+      loanType,
+      reason: option ? 'INACTIVE' : 'NOT_FOUND',
+    });
+    throw new BadRequestException(
+      `Loan Type ${loanType} is not an available option in this organization`,
+    );
+  }
+
   async create(
     actor: AuthContext,
     dto: CreateLoanProductDto,
     meta: RequestMeta,
   ): Promise<LoanProductDetail> {
+    await this.assertLoanTypeOffered(actor, meta, dto.loanType);
+
     // Checked here for a clear message, and again by the unique constraint
     // below — this read cannot exclude a concurrent create, so the constraint is
     // what actually guarantees uniqueness.
@@ -220,6 +263,13 @@ export class LoanProductService {
   ): Promise<LoanProductDetail> {
     const before = await this.findInScope(actor, loanProductId, meta);
     await this.assertVersion(actor, before, dto.expectedVersion, meta);
+
+    // Only when it actually changes. Re-checking an unchanged type would make a
+    // product whose type was since retired uneditable — a rename would be
+    // refused for a field the caller never touched.
+    if (dto.loanType !== before.loanType) {
+      await this.assertLoanTypeOffered(actor, meta, dto.loanType);
+    }
 
     try {
       const updated = await this.prisma.$transaction(async (tx) => {

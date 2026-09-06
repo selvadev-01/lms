@@ -141,6 +141,26 @@ export default function MasterDataList({
             hint="Lower sorts first. Leave blank to add at the end."
             errors={createState.errors?.displayOrder}
           />
+          {/* Loan types only. This is a submission gate, not a label: an
+              application of a type marked here cannot be submitted until a
+              collateral document is attached. */}
+          {category === "LOAN_TYPE" && (
+            <label className="flex items-end gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input type="hidden" name="hasCollateralField" value="1" />
+              <input
+                type="checkbox"
+                name="requiresCollateral"
+                value="true"
+                className="mb-2 h-4 w-4"
+              />
+              <span className="mb-1.5">
+                Requires a collateral document
+                <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+                  Secured loans — gold, vehicle — cannot be submitted without one.
+                </span>
+              </span>
+            </label>
+          )}
           <div className="flex items-end">
             <SubmitButton label="Add value" pendingLabel="Adding…" />
           </div>
@@ -261,6 +281,22 @@ export default function MasterDataList({
                     ]}
                     errors={updateState.errors?.status}
                   />
+                  {category === "LOAN_TYPE" && (
+                    <label className="flex items-center gap-2 text-sm text-gray-700 sm:col-span-3 dark:text-gray-300">
+                      <input type="hidden" name="hasCollateralField" value="1" />
+                      <input
+                        type="checkbox"
+                        name="requiresCollateral"
+                        value="true"
+                        defaultChecked={value.requiresCollateral === true}
+                        className="h-4 w-4"
+                      />
+                      {/* Changing this moves a submission gate, so it applies to
+                          future submissions only — applications already through
+                          were judged against the flag as it stood then. */}
+                      Requires a collateral document before submission
+                    </label>
+                  )}
                   <div className="sm:col-span-3">
                     <SubmitButton label="Save changes" />
                   </div>

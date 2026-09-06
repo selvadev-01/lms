@@ -1,5 +1,6 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import { requireSession } from "@/features/auth";
+import { requirePermissions } from "@/features/auth/utils/require-permissions";
+import { PERMISSIONS } from "@lms/constants";
 import { Metadata } from "next";
 import React from "react";
 
@@ -13,9 +14,15 @@ export const metadata: Metadata = {
  * Placeholder content — the point here is the scope guarantee: the session is
  * validated server-side and the branch shown is the one bound at sign-in, never
  * a value supplied by the client (Scenarios 9 and 18).
+ *
+ * Gated on `dashboard.view` rather than a branch-specific code because none
+ * exists: the `branches.*` family covers branch *administration* in Company
+ * Settings, not this landing page. `dashboard.view` is what the API's dashboard
+ * controller requires, and it carries the same "open the dashboard for the
+ * assigned scope" meaning this page relies on.
  */
 export default async function BranchDashboardPage() {
-  const user = await requireSession();
+  const user = await requirePermissions(PERMISSIONS.DASHBOARD_VIEW);
 
   return (
     <div>

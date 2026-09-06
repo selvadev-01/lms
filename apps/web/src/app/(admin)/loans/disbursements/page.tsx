@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { PERMISSIONS } from "@lms/constants";
 
-import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import { redirect } from "next/navigation";
+
+import PageShell from "@/components/layout/PageShell";
 import { requirePermissions } from "@/features/auth/utils/require-permissions";
 import {
+  DISBURSEMENTS_PAGE_SIZE,
   DisbursementQueue,
   fetchDisbursalQueue,
   fetchDisbursements,
@@ -33,30 +36,53 @@ export const dynamic = "force-dynamic";
 export default async function DisbursementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; page?: string }>;
 }) {
   await requirePermissions(PERMISSIONS.LOANS_DISBURSEMENTS_VIEW);
   const params = await searchParams;
 
+  // A junk `?page=abc` falls back to the first page rather than erroring: the
+  // URL is a user-editable surface here, and refusing to render is a worse
+  // answer than showing them page one.
+  const page = Math.max(1, Number(params.page) || 1);
+
   const [queue, list] = await Promise.all([
     fetchDisbursalQueue(),
-    fetchDisbursements({ search: params.search, status: params.status }),
+    fetchDisbursements({
+      search: params.search,
+      status: params.status,
+      page,
+    }),
   ]);
 
-  return (
-    <div>
-      <PageBreadcrumb pageTitle="Disbursement" />
+  // A 401 means the session died since the shell rendered. Collapsing it into
+  // `listError` would tell a signed-out user their disbursements are
+  // unavailable and leave them retrying.
+  if (list.status === "unauthenticated" || queue.status === "unauthenticated") {
+    redirect("/signin");
+  }
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        <DisbursementQueue
-          queue={queue.status === "ok" ? queue.loans : []}
-          disbursements={list.status === "ok" ? list.disbursements : []}
-          queueError={queue.status !== "ok"}
-          listError={list.status !== "ok"}
-          initialSearch={params.search ?? ""}
-          initialStatus={params.status ?? ""}
-        />
-      </div>
-    </div>
+  return (
+    <PageShell
+      title="Disbursement"
+      description="Approved loans awaiting disbursal, and the disbursement record."
+      breadcrumbs={[
+        { label: "Home", href: "/" },
+        { label: "Loans", href: "/loans/applications" },
+        { label: "Disbursement" },
+      ]}
+    >
+      <DisbursementQueue
+        queue={queue.status === "ok" ? queue.loans : []}
+        disbursements={list.status === "ok" ? list.disbursements : []}
+        queueError={queue.status !== "ok"}
+        listError={list.status !== "ok"}
+        initialSearch={params.search ?? ""}
+        initialStatus={params.status ?? ""}
+        page={page}
+        pageSize={DISBURSEMENTS_PAGE_SIZE}
+        total={list.status === "ok" ? list.total : 0}
+      />
+    </PageShell>
   );
 }

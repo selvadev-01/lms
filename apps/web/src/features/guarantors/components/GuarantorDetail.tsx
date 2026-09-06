@@ -51,7 +51,7 @@ function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <Button size="sm" variant={variant} disabled={pending}>
+    <Button type="submit" size="sm" variant={variant} disabled={pending}>
       {pending ? "Working…" : label}
     </Button>
   );
@@ -228,6 +228,7 @@ export default function GuarantorDetail({
 
                 <div className="flex justify-end gap-3">
                   <Button
+                    type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => setConfirming(false)}
@@ -239,6 +240,7 @@ export default function GuarantorDetail({
               </form>
             ) : (
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => setConfirming(true)}

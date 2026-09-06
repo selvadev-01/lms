@@ -40,6 +40,10 @@ import { emailSchema, idSchema, mobileField, optionalText } from "./primitives";
  * Employee code. Same character class as `branchCodeSchema` and for the same
  * reason: it appears in URLs and exports, so it stays to what survives both
  * unescaped.
+ *
+ * No longer validates a form field — the server allocates the code — but it
+ * remains the written-down definition of the shape a code may take, and its
+ * tests are what pin that the allocator's `EMP001` output stays inside it.
  */
 export const employeeCodeSchema = z
   .string()
@@ -217,14 +221,18 @@ export const updateUserSchema = z.object({
 /**
  * Employee create.
  *
- * Differs from the administrator form in exactly two ways, and both are required
- * rather than optional: an employee has a code (that is what makes the record an
- * employee) and belongs to a branch (Q-RBAC-6 — field work happens somewhere).
+ * Differs from the administrator form in exactly one submitted field: an
+ * employee belongs to a branch (Q-RBAC-6 — field work happens somewhere).
+ *
+ * The Employee ID is *not* here, because the form no longer collects one. The
+ * server allocates it on create, so there is no client value to validate; a
+ * field in this schema would imply an input that does not exist and would let a
+ * hand-built request smuggle one past the form. `employeeCodeSchema` is kept
+ * for reading and filtering existing codes.
  */
 export const createEmployeeSchema = withPasswordRules(
   z.object({
     ...createUserFields,
-    employeeCode: employeeCodeSchema,
     branchId: idSchema.min(1, "Branch is required"),
   }),
 );

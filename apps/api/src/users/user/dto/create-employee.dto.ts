@@ -1,23 +1,20 @@
-import { Transform } from 'class-transformer';
-import {
-  IsNotEmpty,
-  IsString,
-  IsUUID,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { IsUUID } from 'class-validator';
 
-import { trim } from '../../../common/transforms/trim';
 import { CreateUserDto } from './create-user.dto';
 
 /**
  * Add an employee — Scenarios 15, 16.
  *
- * Differs from an administrator in exactly two fields, and both become required:
+ * Differs from an administrator in exactly two ways:
  *
  * - `employeeCode`, whose presence is what makes the record an employee at all.
  *   Users and employees are one table; this column is the discriminator that the
- *   two API surfaces filter on.
+ *   two API surfaces filter on. **It is not an input.** The server allocates it
+ *   (`UserService.nextEmployeeCode`) so that the discriminator can never be
+ *   absent, malformed, or chosen to collide with an existing employee. A client
+ *   that posts one is ignored rather than refused — `forbidNonWhitelisted` is
+ *   not on globally, and silently dropping an unowned field is the same
+ *   treatment the branch-scoping rules give a client-supplied `orgId`.
  * - `branchId`, because field work happens somewhere (Q-RBAC-6). An employee with
  *   no branch could not be offered for a collection assignment, so allowing one
  *   would create a record that exists but can never be used.
@@ -27,13 +24,6 @@ import { CreateUserDto } from './create-user.dto';
  * but reads as an accident, and the required-ness is the point here.
  */
 export class CreateEmployeeDto extends CreateUserDto {
-  @IsString()
-  @Transform(trim)
-  @IsNotEmpty({ message: 'Employee ID is required' })
-  @MaxLength(50)
-  @Matches(/^[A-Za-z0-9_-]+$/, { message: 'Enter a valid Employee ID' })
-  employeeCode!: string;
-
   @IsUUID('4', { message: 'Branch is required' })
   declare branchId: string;
 }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -15,6 +16,7 @@ import { ListLoanSchemesDto } from './dto/list-loan-schemes.dto';
 import {
   CreateSchemeDurationDto,
   UpdateSchemeDurationDto,
+  validateSchemeDurationRange,
 } from './dto/scheme-duration.dto';
 import { SetLoanConfigStatusDto } from './dto/set-loan-config-status.dto';
 import { UpdateLoanSchemeDto } from './dto/update-loan-scheme.dto';
@@ -35,11 +37,58 @@ type SchemeWithProduct = LoanSchemeRow & {
   loanProduct: {
     code: string;
     name: string;
-    loanType: 'PERSONAL' | 'BUSINESS' | 'GOLD' | 'VEHICLE';
+    loanType: string;
     status: 'DRAFT' | 'ACTIVE' | 'INACTIVE';
   };
   durations: LoanSchemeDurationRow[];
 };
+
+/**
+ * Whether a scheme offers this exact `(frequency, durationCount)`.
+ *
+ * **Exported, and the only implementation of this rule.** It is checked in two
+ * places — here, inside the submit transaction, and again by the completeness
+ * service for the advisory summary. Those were two hand-written copies of the
+ * same `.some(...)`, which was survivable while the rule was "the counts must be
+ * equal" and stops being so now that a row may describe a range: a drifted copy
+ * would show a green tick on the review screen for a term submit then refuses.
+ *
+ * A row with null bounds matches its own count and nothing else — the original
+ * behaviour, and why no existing scheme changes meaning. A row with bounds
+ * accepts anything inside them, which is what lets a daily loan carry whatever
+ * count the borrower's dates imply.
+ */
+export function termIsOffered(
+  durations: ReadonlyArray<{
+    status: string;
+    frequency: string;
+    durationCount: number;
+    minDurationCount?: number | null;
+    maxDurationCount?: number | null;
+  }>,
+  frequency: string,
+  durationCount: number,
+): boolean {
+  return durations.some((duration) => {
+    if (duration.status !== 'ACTIVE') return false;
+    if (duration.frequency !== frequency) return false;
+
+    const { minDurationCount: min, maxDurationCount: max } = duration;
+
+    // Both bounds or neither — the CHECK constraint guarantees it, and this
+    // reads the pair rather than trusting one of them alone.
+    //
+    // `== null` deliberately, catching undefined as well as null: Prisma returns
+    // null, but a caller assembling this shape by hand — a mapper, a test
+    // fixture — naturally omits the field, and treating that as "range starts at
+    // undefined" would silently accept every count.
+    if (min == null || max == null) {
+      return duration.durationCount === durationCount;
+    }
+
+    return durationCount >= min && durationCount <= max;
+  });
+}
 
 /**
  * Module 06 — Loan Schemes.
@@ -371,6 +420,14 @@ export class LoanSchemeService {
   ): Promise<LoanSchemeDetail> {
     await this.findInScope(actor, loanSchemeId, meta);
 
+    // Cross-field rules the decorators cannot express. Refused before the write
+    // so the caller gets the reason rather than a CHECK-constraint violation,
+    // which would surface as an opaque 503.
+    const rangeError = validateSchemeDurationRange(dto);
+    if (rangeError) {
+      throw new BadRequestException(rangeError);
+    }
+
     try {
       await this.prisma.$transaction(async (tx) => {
         const row = await tx.loanSchemeDuration.create({
@@ -379,6 +436,10 @@ export class LoanSchemeService {
             loanSchemeId,
             frequency: dto.frequency,
             durationCount: dto.durationCount,
+            // Null unless both were given — `validateSchemeDurationRange` has
+            // already refused one without the other.
+            minDurationCount: dto.minDurationCount ?? null,
+            maxDurationCount: dto.maxDurationCount ?? null,
             status: 'ACTIVE',
           },
         });
@@ -397,6 +458,9 @@ export class LoanSchemeService {
               loanSchemeDurationId: row.loanSchemeDurationId,
               frequency: row.frequency,
               durationCount: row.durationCount,
+              // Audited because they widen what the submit gate accepts.
+              minDurationCount: row.minDurationCount,
+              maxDurationCount: row.maxDurationCount,
             },
           },
           tx,
@@ -615,14 +679,7 @@ export class LoanSchemeService {
       );
     }
 
-    const supported = typed.durations.some(
-      (duration) =>
-        duration.status === 'ACTIVE' &&
-        duration.frequency === frequency &&
-        duration.durationCount === durationCount,
-    );
-
-    if (!supported) {
+    if (!termIsOffered(typed.durations, frequency, durationCount)) {
       throw new ConflictException(
         'This scheme does not offer the selected duration and frequency',
       );

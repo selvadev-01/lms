@@ -38,7 +38,7 @@ export function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <Button size={size} variant={variant} disabled={pending}>
+    <Button type="submit" size={size} variant={variant} disabled={pending}>
       {pending ? pendingLabel : label}
     </Button>
   );

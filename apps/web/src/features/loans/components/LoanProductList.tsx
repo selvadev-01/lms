@@ -2,7 +2,7 @@
 
 import type { LoanProductSummary } from "@lms/types";
 import { Alert } from "@lms/ui";
-import { LOAN_TYPE_OPTIONS, labelFor } from "@lms/validation";
+import { LOAN_TYPE_OPTIONS, labelFor, type SelectOption } from "@lms/validation";
 import Link from "next/link";
 import React, { useActionState, useState } from "react";
 
@@ -23,10 +23,21 @@ import { ConfigStatusBadge } from "./LoanBadges";
  */
 export default function LoanProductList({
   products,
+  loanTypeOptions,
   loadError = false,
   canManage = false,
 }: {
   products: LoanProductSummary[];
+  /**
+   * From the LOAN_TYPE master-data list.
+   *
+   * The tenant's own types, not the compiled-in four: this is the screen where
+   * a product is created, so offering a fixed list would make an admin-defined
+   * type unusable at the one place it matters. `LOAN_TYPE_OPTIONS` remains only
+   * as a label fallback for a stored code the list no longer carries — a type
+   * since retired still has to render in the table.
+   */
+  loanTypeOptions: SelectOption[];
   loadError?: boolean;
   canManage?: boolean;
 }) {
@@ -84,8 +95,13 @@ export default function LoanProductList({
             name="loanType"
             label="Loan Type"
             required
-            options={LOAN_TYPE_OPTIONS}
+            options={loanTypeOptions}
             errors={state.errors?.loanType}
+            hint={
+              loanTypeOptions.length === 0
+                ? "No loan types are configured. Add one under Master Data first."
+                : undefined
+            }
           />
           <div className="sm:col-span-3">
             <SubmitButton label="Create Product" pendingLabel="Creating…" />
@@ -144,7 +160,14 @@ export default function LoanProductList({
                     {product.name}
                   </td>
                   <td className="px-5 py-4 text-gray-700 dark:text-gray-300">
-                    {labelFor(LOAN_TYPE_OPTIONS, product.loanType)}
+                    {/* The tenant's list first; the built-in four as a fallback
+                        for a code it no longer carries, and `labelFor` falls
+                        back to the code itself beyond that — so a retired or
+                        tenant-defined type still renders as something. */}
+                    {labelFor(
+                      [...loanTypeOptions, ...LOAN_TYPE_OPTIONS],
+                      product.loanType,
+                    )}
                   </td>
                   <td className="px-5 py-4">
                     <ConfigStatusBadge status={product.status} />

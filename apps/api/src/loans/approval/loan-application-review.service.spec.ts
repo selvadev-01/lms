@@ -206,6 +206,13 @@ function buildHarness(
     loanApplicationReview: { create: reviewCreate },
     loanApplicationDocument: { findMany: documentFindMany },
     creditAssessment: { findFirst: assessmentFindFirst },
+    // Read by the completeness check to learn whether this application's loan
+    // type is secured — master data now, rather than a constant in code. These
+    // fixtures are all unsecured products, so ID and INCOME are the whole
+    // requirement and the document expectations below are unchanged.
+    masterDataValue: {
+      findUnique: jest.fn(() => Promise.resolve({ requiresCollateral: false })),
+    },
   };
 
   const prisma = {

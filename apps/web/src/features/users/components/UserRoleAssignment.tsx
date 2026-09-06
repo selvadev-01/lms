@@ -10,7 +10,7 @@ import { assignRolesAction, type UserFormState } from "../actions/user-actions";
 function SaveButton() {
   const { pending } = useFormStatus();
   return (
-    <Button size="sm" disabled={pending}>
+    <Button type="submit" size="sm" disabled={pending}>
       {pending ? "Saving…" : "Save roles"}
     </Button>
   );

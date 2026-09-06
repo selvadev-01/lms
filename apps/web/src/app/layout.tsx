@@ -50,7 +50,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={`${outfit.className} dark:bg-gray-900`}>
+      {/* The page background comes from `bg-canvas` on `body` in the design
+          tokens, which resolves per theme. A `dark:` class here would win over
+          it and pin dark mode to the old #101828. */}
+      <body className={outfit.className}>
         <ThemeProvider>
           <SidebarProvider>{children}</SidebarProvider>
         </ThemeProvider>

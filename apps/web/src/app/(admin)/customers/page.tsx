@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { PERMISSIONS } from "@lms/constants";
+import { redirect } from "next/navigation";
 
-import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import PageShell from "@/components/layout/PageShell";
 import {
   hasPermissions,
   requirePermissions,
@@ -41,18 +42,24 @@ export default async function CustomersPage({
     customerType: params.customerType as never,
   });
 
-  return (
-    <div>
-      <PageBreadcrumb pageTitle="Customer Management" />
+  // A 401 here means the session is no longer good — the account was
+  // deactivated, or a role was withdrawn, since the page shell rendered.
+  // Collapsing it into `loadError` would show "we could not load customers" to
+  // someone who is actually signed out, and leave them clicking Refresh.
+  if (result.status === "unauthenticated") redirect("/signin");
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        <CustomerList
-          customers={result.status === "ok" ? result.customers : []}
-          loadError={result.status !== "ok"}
-          canCreate={hasPermissions(user, PERMISSIONS.CUSTOMERS_CREATE)}
-          initialSearch={params.search ?? ""}
-        />
-      </div>
-    </div>
+  return (
+    <PageShell
+      title="Customer Management"
+      description="Search customers, review KYC status and open a profile."
+      breadcrumbs={[{ label: "Home", href: "/" }, { label: "Customers" }]}
+    >
+      <CustomerList
+        customers={result.status === "ok" ? result.customers : []}
+        loadError={result.status !== "ok"}
+        canCreate={hasPermissions(user, PERMISSIONS.CUSTOMERS_CREATE)}
+        initialSearch={params.search ?? ""}
+      />
+    </PageShell>
   );
 }

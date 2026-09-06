@@ -32,6 +32,8 @@ export interface MasterDataValueDetail extends SelectOption {
   displayOrder: number;
   status: 'ACTIVE' | 'INACTIVE';
   isSystem: boolean;
+  /** LOAN_TYPE only; null for every other category. */
+  requiresCollateral: boolean | null;
   version: string;
 }
 
@@ -113,11 +115,31 @@ export class MasterDataService {
     return rows.map((row) => this.toDetail(row));
   }
 
+  /**
+   * `requiresCollateral` belongs to LOAN_TYPE rows and nowhere else.
+   *
+   * Refused rather than ignored: a caller sending it for a GENDER row has
+   * misunderstood something, and silently discarding the field would let them
+   * believe a requirement was recorded when nothing was stored.
+   */
+  private assertCollateralFlagApplies(
+    category: string,
+    requiresCollateral: boolean | undefined,
+  ): void {
+    if (requiresCollateral !== undefined && category !== 'LOAN_TYPE') {
+      throw new ConflictException(
+        'Collateral requirement applies only to loan type options',
+      );
+    }
+  }
+
   async create(
     actor: AuthContext,
     dto: CreateMasterDataValueDto,
     meta: RequestMeta,
   ): Promise<MasterDataValueDetail> {
+    this.assertCollateralFlagApplies(dto.category, dto.requiresCollateral);
+
     const created = await this.prisma
       .$transaction(async (tx) => {
         const row = await tx.masterDataValue.create({
@@ -132,6 +154,14 @@ export class MasterDataService {
             // owns and business logic reads; letting a caller claim it would
             // let them make a row undeletable at will.
             isSystem: false,
+            // Only LOAN_TYPE carries this; null everywhere else so the column
+            // never asserts an answer to a question the category does not ask.
+            // `assertCollateralFlagApplies` has already refused a caller who
+            // sent it for another category, rather than dropping it silently.
+            requiresCollateral:
+              dto.category === 'LOAN_TYPE'
+                ? (dto.requiresCollateral ?? false)
+                : null,
           },
         });
 
@@ -178,6 +208,10 @@ export class MasterDataService {
   ): Promise<MasterDataValueDetail> {
     const existing = await this.findInScope(actor, valueId);
 
+    // Against the stored category, not a DTO field — `category` is not editable,
+    // so the row itself is the only thing that can say whether the flag applies.
+    this.assertCollateralFlagApplies(existing.category, dto.requiresCollateral);
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.masterDataValue.update({
         where: { orgId_valueId: { orgId: actor.orgId, valueId } },
@@ -187,6 +221,9 @@ export class MasterDataService {
             ? {}
             : { displayOrder: dto.displayOrder }),
           ...(dto.status === undefined ? {} : { status: dto.status }),
+          ...(dto.requiresCollateral === undefined
+            ? {}
+            : { requiresCollateral: dto.requiresCollateral }),
         },
       });
 
@@ -204,11 +241,15 @@ export class MasterDataService {
             label: existing.label,
             displayOrder: existing.displayOrder,
             status: existing.status,
+            // Audited because it moves a submit gate: flipping it changes which
+            // documents future applications of this type must carry.
+            requiresCollateral: existing.requiresCollateral,
           },
           newData: {
             label: row.label,
             displayOrder: row.displayOrder,
             status: row.status,
+            requiresCollateral: row.requiresCollateral,
           },
         },
         tx,
@@ -336,6 +377,7 @@ export class MasterDataService {
     displayOrder: number;
     status: string;
     isSystem: boolean;
+    requiresCollateral: boolean | null;
     updatedAt: Date;
   }): MasterDataValueDetail {
     return {
@@ -349,6 +391,10 @@ export class MasterDataService {
       displayOrder: row.displayOrder,
       status: row.status as 'ACTIVE' | 'INACTIVE',
       isSystem: row.isSystem,
+      // Only meaningful for LOAN_TYPE; null elsewhere, and carried through as
+      // null rather than coerced to false so "not applicable" stays
+      // distinguishable from "applicable and not required".
+      requiresCollateral: row.requiresCollateral,
       // The optimistic-concurrency handle, as everywhere else here.
       version: row.updatedAt.toISOString(),
     };

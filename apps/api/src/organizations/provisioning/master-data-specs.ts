@@ -1,5 +1,5 @@
 /**
- * The starting values for the four lists a business admin maintains.
+ * The starting values for the option lists a business admin maintains.
  *
  * Extracted from `prisma/seed.ts` so the seed and the signup provisioning path
  * cannot drift apart.
@@ -16,6 +16,8 @@ export interface MasterDataSpec {
   category: string;
   code: string;
   label: string;
+  /** LOAN_TYPE only — see the LOAN_TYPE block below. */
+  requiresCollateral?: boolean;
 }
 
 export const MASTER_DATA_SPECS: readonly MasterDataSpec[] = [
@@ -92,6 +94,47 @@ export const MASTER_DATA_SPECS: readonly MasterDataSpec[] = [
   },
   { category: 'LOAN_PURPOSE', code: 'AGRICULTURE', label: 'Agriculture' },
   { category: 'LOAN_PURPOSE', code: 'OTHER', label: 'Other' },
+
+  // Replaces the `LoanType` Postgres enum on LoanProduct.
+  //
+  // **Unlike DOCUMENT_TYPE above, this list IS authority.** A product's type is
+  // whatever code is stored here, and `LoanProductService` refuses a product
+  // whose type is not an ACTIVE row — so an admin adding "Tractor" makes a real
+  // new type, which is the entire point of moving it out of the enum. An
+  // organization that lends against something this codebase never imagined can
+  // say so without a deploy.
+  //
+  // `requiresCollateral` carries the knowledge that used to live in
+  // `COLLATERAL_LOAN_TYPES` in the completeness service. It decides whether an
+  // application of this type must produce a COLLATERAL document before it can be
+  // submitted — a gate, not a label, which is why it lives beside the type
+  // rather than in a set the code has to keep in step.
+  {
+    category: 'LOAN_TYPE',
+    code: 'PERSONAL',
+    label: 'Personal',
+    requiresCollateral: false,
+  },
+  {
+    category: 'LOAN_TYPE',
+    code: 'BUSINESS',
+    label: 'Business',
+    requiresCollateral: false,
+  },
+  // Secured: a gold loan with no collateral document is the case the gate exists
+  // to stop.
+  {
+    category: 'LOAN_TYPE',
+    code: 'GOLD',
+    label: 'Gold',
+    requiresCollateral: true,
+  },
+  {
+    category: 'LOAN_TYPE',
+    code: 'VEHICLE',
+    label: 'Vehicle',
+    requiresCollateral: true,
+  },
 ];
 
 export interface OrderedMasterDataSpec extends MasterDataSpec {

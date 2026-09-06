@@ -787,7 +787,16 @@ export type PaiseString = string;
 /** Integer basis points as a decimal string, for the same reason as PaiseString. */
 export type BpsString = string;
 
-export type LoanType = "PERSONAL" | "BUSINESS" | "GOLD" | "VEHICLE";
+/**
+ * A `LOAN_TYPE` master-data code.
+ *
+ * Was a union of the four types the codebase knew about. Loan types are
+ * admin-managed per tenant now, so the set is open — a tenant may define one
+ * this package has never heard of, and a closed union would make such a product
+ * untypeable. `PERSONAL`, `BUSINESS`, `GOLD` and `VEHICLE` are still what every
+ * org is seeded with; they are simply no longer the only possibilities.
+ */
+export type LoanType = string;
 export type InterestType = "FLAT" | "REDUCING" | "CUSTOM_RATE";
 export type RepaymentFrequency =
   "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
@@ -858,7 +867,17 @@ export interface LoanProductDetail extends LoanProductSummary {
 export interface LoanSchemeDurationOption {
   loanSchemeDurationId: ID;
   frequency: RepaymentFrequency;
+  /** The accepted count, or the default the form pre-fills when ranged. */
   durationCount: number;
+  /**
+   * An inclusive range of accepted counts, or null for an exact term.
+   *
+   * Set for a term the borrower states rather than picks — a daily loan runs to
+   * a date, so its count is whatever those dates imply. Both are null or both
+   * are set; never one alone.
+   */
+  minDurationCount: number | null;
+  maxDurationCount: number | null;
   status: "ACTIVE" | "INACTIVE";
 }
 

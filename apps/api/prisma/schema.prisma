@@ -179,15 +179,6 @@ enum LeadStatus {
 
 // --- Loan ---
 
-enum LoanType {
-  PERSONAL
-  BUSINESS
-  GOLD
-  VEHICLE
-
-  @@map("loan_type")
-}
-
 enum InterestType {
   FLAT
   REDUCING
@@ -2209,7 +2200,11 @@ model LoanProduct {
   loanProductId String            @default(uuid()) @map("loan_product_id") @db.Uuid
   code          String            @db.VarChar(50)
   name          String            @db.VarChar(150)
-  loanType      LoanType          @map("loan_type")
+  /// A `LOAN_TYPE` master-data code, not an enum: a tenant may define its own
+  /// loan types (Option 1). Whether a type requires collateral is carried by
+  /// that master-data row's `requiresCollateral` flag, which is what the
+  /// application completeness check reads — see `requiredDocumentTypes`.
+  loanType      String            @map("loan_type") @db.VarChar(50)
   status        LoanProductStatus
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -2256,7 +2251,25 @@ model LoanSchemeDuration {
   loanSchemeDurationId String             @default(uuid()) @map("loan_scheme_duration_id") @db.Uuid
   loanSchemeId         String             @map("loan_scheme_id") @db.Uuid
   frequency            RepaymentFrequency
+  /// The term this row offers. When the two bounds below are null this is the
+  /// only count accepted — the original behaviour. When they are set it is the
+  /// default the application form pre-fills.
   durationCount        Int                @map("duration_count")
+
+  /// An inclusive range of accepted counts, for a term a borrower states rather
+  /// than picks.
+  ///
+  /// Daily loans are sold as "from today until this date", so the count is
+  /// whatever the dates imply — 45 days, 137 days — and a published list of
+  /// fixed counts cannot express that. Weekly and monthly stay a picklist,
+  /// because there the small list of terms *is* the lender's offer.
+  ///
+  /// Both null means an exact term. Nullable rather than defaulted for exactly
+  /// that reason: every existing row keeps its current meaning with no backfill,
+  /// and "no range" stays distinguishable from "a range that happens to be one
+  /// value wide".
+  minDurationCount     Int?               @map("min_duration_count")
+  maxDurationCount     Int?               @map("max_duration_count")
   status               RecordStatus
 
   organization Organization @relation(fields: [orgId], references: [orgId], onDelete: Cascade)
@@ -4762,6 +4775,16 @@ model MasterDataValue {
   /// the completeness check iterates, for example. They may be deactivated or
   /// relabelled but never deleted: removing `ID` would silently break KYC.
   isSystem Boolean @default(false) @map("is_system")
+
+  /// LOAN_TYPE only: whether a loan of this type must carry a COLLATERAL
+  /// document before it can be submitted.
+  ///
+  /// This replaces the hardcoded `COLLATERAL_LOAN_TYPES` set that named GOLD and
+  /// VEHICLE in code. Once a tenant can define its own loan types, that set can
+  /// no longer answer the question for a type it has never heard of — so the
+  /// answer moves next to the type itself. Null for every other category, where
+  /// the question is meaningless.
+  requiresCollateral Boolean? @map("requires_collateral")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

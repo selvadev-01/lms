@@ -1,7 +1,7 @@
 "use client";
 
 import type { CashHandoverReadiness } from "@lms/types";
-import { Alert } from "@lms/ui";
+import { Alert, Button } from "@lms/ui";
 import { useActionState, useState } from "react";
 
 import {
@@ -109,20 +109,25 @@ export default function CashHandoverForm({
           {(state.handoverableAmounts ?? readiness.handoverableAmounts).map(
             (amount) => (
               /*
-                A plain <button type="button">, not the shared `Button`: that
-                component renders a bare <button>, which defaults to
-                type="submit" and would post the form instead of filling the
-                field. Widening its props for this case would put a submit
-                footgun on every other caller.
+                The shared `Button` with an explicit type. It used to be a bare
+                <button> here because `Button` rendered no `type` attribute and
+                so inherited the DOM default of "submit", which posted the form
+                instead of filling the field. `Button` now takes `type` and
+                defaults it to "button", so the workaround is no longer needed.
+
+                `size="lg"` is a 44px target: these are tapped one-handed,
+                outdoors, by a field officer counting cash.
               */
-              <button
+              <Button
                 key={amount}
                 type="button"
+                variant="secondary"
+                size="lg"
+                className="tabular"
                 onClick={() => setRupees(paiseToRupees(amount))}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 tabular-nums hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
               >
                 {formatPaise(amount)}
-              </button>
+              </Button>
             ),
           )}
         </div>

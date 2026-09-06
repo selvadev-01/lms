@@ -6,7 +6,7 @@ import type { AuthUser } from "@lms/types";
  * The signed-in user's own profile.
  *
  * Read-only, and every field comes from the session. It replaced three
- * TailAdmin template cards that displayed a fictional person ("Musharof
+ * scaffold cards that displayed a fictional person ("Musharof
  * Chowdhury", an Arizona address, Pimjo social links) beside Edit buttons whose
  * Save handler was `console.log("Saving changes...")` — a form that accepted
  * input and discarded it.
@@ -76,9 +76,7 @@ export default function ProfileCard({ user }: { user: AuthUser }) {
           {/* Branch is shown for a branch-scoped user only. A Super Admin has
               no branch, and "Not recorded" would read as missing data rather
               than as the unscoped access it actually is. */}
-          {user.branchName && (
-            <Field label="Branch" value={user.branchName} />
-          )}
+          {user.branchName && <Field label="Branch" value={user.branchName} />}
           <Field label="Roles" value={user.roles.join(", ")} />
         </div>
 

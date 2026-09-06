@@ -53,10 +53,10 @@ export default async function ReportingDashboardPage({
                 <DateField
                   id="dashboard-from"
                   name="fromDate"
-                  
+
                   defaultValue={params.fromDate}
-            bare
-          />
+                  bare
+                />
               </div>
 
               <div>
@@ -69,10 +69,10 @@ export default async function ReportingDashboardPage({
                 <DateField
                   id="dashboard-to"
                   name="toDate"
-                  
+
                   defaultValue={params.toDate}
-            bare
-          />
+                  bare
+                />
               </div>
 
               <button
