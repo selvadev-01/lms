@@ -540,11 +540,22 @@ export class LoanApplicationService {
       meta,
     );
 
-    // MORE_INFO returns straight to UNDER_REVIEW rather than to SUBMITTED: the
-    // reviewer already has it, and sending it back to the unclaimed queue would
-    // lose that (Scenario 23, transition T6).
-    const nextStatus =
-      before.status === 'MORE_INFO_REQUIRED' ? 'UNDER_REVIEW' : 'SUBMITTED';
+    /**
+     * Submission lands in UNDER_REVIEW, whichever state it came from.
+     *
+     * MORE_INFO always did (Scenario 23, transition T6): the reviewer already
+     * has the application, and sending it back to an unclaimed queue would lose
+     * that. A first submission now does too, because the step that used to sit
+     * between them earned nothing. `startReview` wrote no reviewer, no
+     * timestamp and no review row — only a status flip and an audit line — so
+     * the "claim" it described was never actually recorded, and requiring it
+     * bought a click rather than a control.
+     *
+     * SUBMITTED remains a legal state rather than being retired: rows already
+     * sit in it, `reject` still accepts it as a source, and `startReview` still
+     * moves one forward. Nothing that reads the status has to change.
+     */
+    const nextStatus = 'UNDER_REVIEW';
 
     try {
       await this.prisma.$transaction(async (tx) => {

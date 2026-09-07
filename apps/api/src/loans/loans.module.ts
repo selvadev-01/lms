@@ -20,6 +20,7 @@ import { CreditAssessmentService } from './approval/credit-assessment.service';
 import { DisbursementController } from './disbursal/disbursement.controller';
 import { DisbursementService } from './disbursal/disbursement.service';
 import { LedgerService } from './disbursal/ledger.service';
+import { LoanController } from './shared/loan.controller';
 import { LoanService } from './shared/loan.service';
 import { LoanApplicationCompletenessService } from './applications/loan-application-completeness.service';
 import { LoanApplicationDocumentController } from './applications/loan-application-document.controller';
@@ -101,6 +102,9 @@ import { RepaymentScheduleService } from './repayment/repayment-schedule.service
     CollectionController,
     RepaymentScheduleController,
     LoanCollectionController,
+    // A bare `GET /loans` with no second segment, so it neither shadows nor is
+    // shadowed by the `loans/:loanId` routes above.
+    LoanController,
   ],
   providers: [
     LoanProductService,

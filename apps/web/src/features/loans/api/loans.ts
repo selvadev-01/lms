@@ -5,12 +5,15 @@ import type {
   ApprovalReadiness,
   CreditAssessmentHistory,
   LoanApplicationDetail,
+  LoanApplicationDocumentSummary,
   LoanApplicationHistoryEntry,
   LoanApplicationSummary,
   LoanProductDetail,
   LoanProductSummary,
   LoanSchemeDetail,
   LoanSchemeSummary,
+  LoanSummaryView,
+  RepaymentScheduleView,
   SanctionLetterDetail,
 } from "@lms/types";
 
@@ -223,6 +226,95 @@ export async function fetchApplicationHistory(
   return result.status === "ok"
     ? { status: "ok", history: result.data.history }
     : result;
+}
+
+/**
+ * The loans in scope, optionally for one customer.
+ *
+ * Returns `[]` on failure rather than an error shape: the caller is a panel
+ * beside other panels on the customer screen, and a failed loan read must not
+ * take down a page whose main subject is the customer.
+ */
+export async function fetchLoans(
+  options: { customerId?: string } = {},
+): Promise<LoanSummaryView[]> {
+  const params = new URLSearchParams();
+  if (options.customerId) params.set("customerId", options.customerId);
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+
+  const result = await apiGet<{ loans: LoanSummaryView[] }>(`/loans${query}`);
+
+  return result.status === "ok" ? result.data.loans : [];
+}
+
+/**
+ * One loan, or null.
+ *
+ * There is no `GET /loans/:loanId` — `LoanService` exposes `findInScope` to
+ * other modules and a list to the portfolio. This asks the list for the single
+ * row, which is already scoped and already mapped.
+ *
+ * **`customerId` is not enough to find it.** The list is capped at the newest
+ * 100 rows, so filtering only by customer silently misses an older loan — a bug
+ * I shipped and caught in the browser, where the page 404'd on a loan that
+ * plainly existed. The loan number filter narrows to the one row instead.
+ */
+export async function fetchLoan(
+  loanId: string,
+): Promise<LoanSummaryView | null> {
+  const result = await apiGet<{ loans: LoanSummaryView[] }>(
+    `/loans?loanId=${encodeURIComponent(loanId)}`,
+  );
+
+  if (result.status !== "ok") return null;
+
+  // Defended rather than trusted: if the filter were ever dropped server-side
+  // this would still return the right loan instead of an arbitrary one.
+  return result.data.loans.find((loan) => loan.loanId === loanId) ?? null;
+}
+
+/**
+ * A loan's active repayment schedule.
+ *
+ * Distinct from `fetchRepaymentSchedule` in the disbursements feature, which is
+ * keyed by `disbursementId` and answers "what did this disbursal generate". This
+ * is keyed by the loan and answers "what does this loan owe now" — the same
+ * question from the other side, and the one a loan page asks.
+ */
+export async function fetchLoanSchedule(
+  loanId: string,
+): Promise<RepaymentScheduleView | null> {
+  // `apiGetRecord`, not `apiGet`: a loan that has not been disbursed has no
+  // schedule, and the API says so with a 404. That is an ordinary answer here,
+  // not a failure — `apiGet` logs every non-2xx, so a customer with undisbursed
+  // loans filled the console with errors describing normal state.
+  const result = await apiGetRecord<RepaymentScheduleView>(
+    `/loans/${encodeURIComponent(loanId)}/repayment-schedule`,
+  );
+
+  // Null rather than an error shape: this is one panel among several on the loan
+  // page, and a caller without `loans.schedules.view` should see the rest of the
+  // loan rather than a broken screen.
+  return result.status === "ok" ? result.data : null;
+}
+
+/**
+ * Documents this customer filed on their *other* applications.
+ *
+ * Empty for a first-time borrower, which is the common case — the caller renders
+ * nothing rather than an empty panel.
+ */
+export async function fetchReusableDocuments(
+  applicationId: string,
+): Promise<LoanApplicationDocumentSummary[]> {
+  const result = await apiGet<{ documents: LoanApplicationDocumentSummary[] }>(
+    `/loan-applications/${encodeURIComponent(applicationId)}/documents/reusable`,
+  );
+
+  // A failed read means "offer nothing to reuse", never a broken screen: this is
+  // a convenience beside a working file picker, so it must not be able to take
+  // the page down with it.
+  return result.status === "ok" ? result.data.documents : [];
 }
 
 /** The current credit assessment and every superseded one (Scenario 7). */

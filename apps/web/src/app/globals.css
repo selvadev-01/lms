@@ -15,6 +15,28 @@
    `@lms/ui` ships TypeScript source, so scan the source. */
 @source "../../../../packages/ui/src";
 
+@layer base {
+  /* The app font stack, applied to <body> in the root layout.
+
+     Outfit first, Noto Sans Tamil second. Font fallback is per-codepoint, so
+     this needs no class and no toggle: Outfit has no Tamil glyphs, so every
+     Tamil codepoint falls through to Noto while Latin text renders in Outfit
+     exactly as before. A mixed string — a Tamil sentence containing "EMI" or a
+     rupee figure — comes out right for the same reason, which a class-based
+     font swap would get wrong. */
+  .font-app {
+    font-family: var(--font-outfit), var(--font-tamil), sans-serif;
+  }
+
+  /* Tamil glyphs carry taller ascenders and descenders than Latin, so the
+     tight leading on small helper text clips them. Applies only while the
+     instruction language is Tamil; English keeps its original rhythm. */
+  html[lang="ta"] .text-xs,
+  html[lang="ta"] .text-sm {
+    line-height: 1.7;
+  }
+}
+
 /* App-local: third-party library overrides (ApexCharts, flatpickr). */
 @layer utilities {
   /* Suppresses the browser's own calendar button on any remaining native date

@@ -85,7 +85,23 @@ export class LoanApplicationReviewService {
     private readonly events: NotificationEventsService,
   ) {}
 
-  /** T4: SUBMITTED -> UNDER_REVIEW. An explicit claim, not implicit on read. */
+  /**
+   * T4: SUBMITTED -> UNDER_REVIEW.
+   *
+   * **No longer a required step.** Submitting now lands in UNDER_REVIEW
+   * directly, because this transition recorded nothing that a claim needs —
+   * no reviewer, no timestamp, no review row — so requiring it cost a click and
+   * bought no control.
+   *
+   * It remains for the rows that need it: applications submitted before that
+   * change, and any future path that parks one in SUBMITTED. Calling it on an
+   * application already under review **succeeds without writing anything**
+   * rather than refusing. That is deliberate — a caller asking for a state the
+   * application is already in has its wish, and a 409 here would only tell an
+   * integration to stop doing something harmless. A genuinely illegal source
+   * (an APPROVED application, say) still lands in the illegal-transition branch
+   * and is audited there.
+   */
   async startReview(
     actor: AuthContext,
     applicationId: string,
@@ -98,11 +114,13 @@ export class LoanApplicationReviewService {
       meta,
     );
 
-    await this.transition(actor, before, expectedVersion, meta, {
-      from: ['SUBMITTED'],
-      to: 'UNDER_REVIEW',
-      action: AuditAction.LOAN_APPLICATION_REVIEW_STARTED,
-    });
+    if (before.status !== 'UNDER_REVIEW') {
+      await this.transition(actor, before, expectedVersion, meta, {
+        from: ['SUBMITTED'],
+        to: 'UNDER_REVIEW',
+        action: AuditAction.LOAN_APPLICATION_REVIEW_STARTED,
+      });
+    }
 
     return this.applications.getById(actor, applicationId, meta);
   }

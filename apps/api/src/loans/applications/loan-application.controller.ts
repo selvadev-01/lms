@@ -30,6 +30,7 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 import {
   AcceptSanctionDto,
   ApplicationTransitionDto,
+  ApproveAndIssueDto,
   ApproveApplicationDto,
   CreateLoanApplicationDto,
   DeclineSanctionDto,
@@ -341,6 +342,34 @@ export class LoanApplicationController {
     @Req() req: Request,
   ): Promise<LoanApplicationDetail> {
     return this.sanctions.issue(user, applicationId, dto, this.meta(req));
+  }
+
+  /**
+   * T8 then T11 in one request, for a caller who may do both.
+   *
+   * Requires **both** grants, so it adds no authority: someone who may only
+   * approve, or only issue, keeps using the two routes above. Those remain the
+   * primitives — this is a convenience that calls them in order.
+   */
+  @Post(':applicationId/approve-and-sanction')
+  @RequirePermissions(
+    APPLICATIONS_APPROVE_PERMISSION,
+    APPLICATIONS_SANCTION_ISSUE_PERMISSION,
+  )
+  @HttpCode(200)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async approveAndSanction(
+    @CurrentUser() user: AuthContext,
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Body() dto: ApproveAndIssueDto,
+    @Req() req: Request,
+  ): Promise<LoanApplicationDetail> {
+    return this.sanctions.approveAndIssue(
+      user,
+      applicationId,
+      dto,
+      this.meta(req),
+    );
   }
 
   /** T12 — Module 08 Scenario 33. */

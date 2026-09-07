@@ -16,11 +16,13 @@ import {
 } from '../applications/application-transition.service';
 import {
   AcceptSanctionDto,
+  ApproveAndIssueDto,
   DeclineSanctionDto,
   IssueSanctionDto,
   RecordAgreementDto,
 } from '../applications/dto/loan-application.dto';
 import { LoanApplicationService } from '../applications/loan-application.service';
+import { LoanApplicationReviewService } from './loan-application-review.service';
 import {
   toIsoDate,
   type ApplicationWithRelations,
@@ -137,6 +139,9 @@ export class LoanSanctionService {
     private readonly prisma: PrismaService,
     private readonly applications: LoanApplicationService,
     private readonly transitions: ApplicationTransitionService,
+    // For `approveAndIssue` only, which runs the real `approve` rather than a
+    // second copy of its gates.
+    private readonly reviews: LoanApplicationReviewService,
   ) {}
 
   /** The letter for an application, or a 404. Scope resolves through the application. */
@@ -228,6 +233,68 @@ export class LoanSanctionService {
     });
 
     return this.applications.getById(actor, applicationId, meta);
+  }
+
+  /**
+   * T8 then T11 in one request: approve, and issue the letter that follows.
+   *
+   * # Why this exists
+   *
+   * Both acts need permissions only the approval authority holds, and the
+   * letter takes no input that the approval did not already settle — its terms
+   * are snapshotted from the application, and `validUntil` and `notes` are
+   * optional. So the reviewer pressed Approve, waited for a reload, and pressed
+   * a second button on a form they could leave blank. That is two clicks
+   * expressing one decision.
+   *
+   * # What it does not change
+   *
+   * This is a convenience over the two endpoints, not a replacement for them.
+   * Both remain, and a caller holding only one of the two permissions still
+   * uses them separately — which is what keeps a tenant free to give the
+   * sanction to someone other than the approver.
+   *
+   * Every gate still runs, in the same order, because this calls the same two
+   * methods rather than reimplementing either: approval's EMI, document and
+   * assessment checks, then the sanction's own schedule check. Both audit rows
+   * and both review rows are still written, so the trail is indistinguishable
+   * from clicking twice.
+   *
+   * # Why the two are not one transaction
+   *
+   * They are sequential calls, each atomic in itself. Wrapping them in one
+   * outer transaction would mean re-implementing both — each already opens its
+   * own, and nesting them would need every gate rewritten against a shared `tx`.
+   * The failure that matters is the second half failing after the first
+   * committed, and that leaves an APPROVED application with no letter: exactly
+   * the state the two-click flow produces when someone approves and stops. It
+   * is a documented, recoverable state with its own button, not a corruption.
+   */
+  async approveAndIssue(
+    actor: AuthContext,
+    applicationId: string,
+    dto: ApproveAndIssueDto,
+    meta: RequestMeta,
+  ): Promise<LoanApplicationDetail> {
+    const approved = await this.reviews.approve(
+      actor,
+      applicationId,
+      { comments: dto.comments, expectedVersion: dto.expectedVersion },
+      meta,
+    );
+
+    // The approval bumped the row, so the sanction is issued against the
+    // version approval produced rather than the one the caller sent.
+    return this.issue(
+      actor,
+      applicationId,
+      {
+        validUntil: dto.validUntil,
+        notes: dto.notes,
+        expectedVersion: approved.version,
+      },
+      meta,
+    );
   }
 
   /** T12: SANCTIONED -> CUSTOMER_ACCEPTED (Scenario 33). */

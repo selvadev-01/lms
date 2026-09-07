@@ -6,6 +6,17 @@ import type { AuthContext } from '../../common/auth-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { TransitionTx } from '../applications/application-transition.service';
 
+export const LOANS_VIEW_PERMISSION = 'loans.view';
+
+/**
+ * The most a single list read returns.
+ *
+ * The portfolio renders every row it is given, so this is what keeps that page
+ * bounded. Newest-first ordering makes the cap fall on the oldest loans, which
+ * are the least likely to be what a clerk opened the screen for.
+ */
+const LIST_LIMIT = 100;
+
 const NOT_REACHABLE = 'Loan not found';
 
 /**
@@ -27,6 +38,46 @@ export class LoanService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * The loans a caller may see, optionally for one customer.
+   *
+   * Added for the customer portfolio, which needed the one thing this module
+   * had no route for: every loan route until now hung off a `loanId` the caller
+   * already knew, so "what has this borrower taken" could not be asked.
+   *
+   * The branch clause is the same expression `findInScope` uses, deliberately —
+   * a Branch Admin sees their branch's loans and nobody else's, and a second
+   * hand-written scoping rule is how a list endpoint ends up wider than the
+   * detail endpoint it summarises.
+   *
+   * No audit row: this is a list read, following `MasterDataService`'s reasoning
+   * that auditing every list render buries the mutations that matter. Reaching
+   * an individual loan still audits a denial.
+   */
+  async list(
+    actor: AuthContext,
+    query: { customerId?: string; loanId?: string },
+  ): Promise<LoanWithRelations[]> {
+    return this.prisma.loan.findMany({
+      where: {
+        orgId: actor.orgId,
+        ...(actor.branchId ? { branchId: actor.branchId } : {}),
+        ...(query.customerId ? { customerId: query.customerId } : {}),
+        ...(query.loanId ? { loanId: query.loanId } : {}),
+      },
+      include: LOAN_INCLUDE,
+      // Newest first: a portfolio is read top-down and the current loan is the
+      // one being asked about.
+      orderBy: { createdAt: 'desc' },
+      // Capped because the caller renders every row. A seeded fixture already
+      // has a customer with 1,663 loans, and while that is not a real book, a
+      // long-standing borrower is on the same curve — an uncapped list is a page
+      // that gets slower every year until it stops loading. The newest hundred
+      // answers "what is this customer doing now", which is the question.
+      take: LIST_LIMIT,
+    });
+  }
 
   /**
    * A loan the caller may reach, or a 404.

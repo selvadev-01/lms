@@ -296,6 +296,39 @@ export async function issueSanctionAction(
   return state.success ? { success: "Sanction letter issued." } : state;
 }
 
+/**
+ * T8 and T11 together, for a caller who may do both.
+ *
+ * Reuses `issueSanctionSchema` because the combined body is the sanction's
+ * fields plus optional approval comments — validating against a second schema
+ * that said the same thing would be one more place to keep in step. The API
+ * requires both permissions, so this adds no authority; the separate Approve and
+ * Issue buttons remain for anyone holding only one of them.
+ */
+export async function approveAndSanctionAction(
+  _previous: ApplicationFormState,
+  formData: FormData,
+): Promise<ApplicationFormState> {
+  const parsed = issueSanctionSchema.safeParse({
+    validUntil: formData.get("validUntil"),
+    notes: formData.get("notes"),
+    expectedVersion: formData.get("expectedVersion"),
+  });
+
+  if (!parsed.success) {
+    return { errors: parsed.error.flatten().fieldErrors };
+  }
+
+  const state = await transition(formData, "approve-and-sanction", {
+    ...parsed.data,
+    comments: formData.get("comments"),
+  });
+
+  return state.success
+    ? { success: "Application approved and sanction letter issued." }
+    : state;
+}
+
 /** T12 — Scenario 33. Recording what the customer answered, not deciding it. */
 export async function acceptSanctionAction(
   _previous: ApplicationFormState,

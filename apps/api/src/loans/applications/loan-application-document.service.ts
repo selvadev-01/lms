@@ -24,6 +24,7 @@ import {
 } from '../../customers/storage/sniff-mime';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  ReuseApplicationDocumentDto,
   UploadApplicationDocumentDto,
   VerifyApplicationDocumentDto,
 } from './dto/loan-application.dto';
@@ -95,6 +96,22 @@ export class LoanApplicationDocumentService {
   }
 
   /**
+   * A decided application's evidence is fixed.
+   *
+   * Allowing a document to be attached after approval would let the pack a
+   * decision rested on change underneath it. Shared by `upload` and `reuse`
+   * rather than written twice — a second copy is how one of them ends up
+   * missing a status the other refuses.
+   */
+  private assertAcceptsDocuments(status: string): void {
+    if (status === 'APPROVED' || status === 'REJECTED') {
+      throw new ConflictException(
+        `Documents cannot be attached to an application that is ${status}`,
+      );
+    }
+  }
+
+  /**
    * Attaches a supporting document, superseding any current one of the same type.
    *
    * The bytes are written before the row so a storage failure never produces a
@@ -115,16 +132,7 @@ export class LoanApplicationDocumentService {
       meta,
     );
 
-    // A decided application's evidence is fixed. Allowing an upload after
-    // approval would let the pack a decision rested on change underneath it.
-    if (
-      application.status === 'APPROVED' ||
-      application.status === 'REJECTED'
-    ) {
-      throw new ConflictException(
-        `Documents cannot be attached to an application that is ${application.status}`,
-      );
-    }
+    this.assertAcceptsDocuments(application.status);
 
     const buffer = file?.buffer;
 
@@ -270,6 +278,178 @@ export class LoanApplicationDocumentService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Documents this customer already produced on an earlier application.
+   *
+   * Documents belong to an application, not to a customer, so a repeat borrower
+   * is asked for the same ID and income proof on every loan. This is the read
+   * behind the "reuse" control: it offers what they filed last time so a clerk
+   * confirms rather than re-scans.
+   *
+   * Scoped through the customer, and only their *other* applications — never a
+   * document already on this one, and never another borrower's. The tenant
+   * boundary is `orgId` as everywhere else.
+   */
+  async reusable(
+    actor: AuthContext,
+    applicationId: string,
+    meta: RequestMeta,
+  ): Promise<LoanApplicationDocumentSummary[]> {
+    const application = await this.applications.findInScope(
+      actor,
+      applicationId,
+      meta,
+    );
+
+    const rows = await this.prisma.loanApplicationDocument.findMany({
+      where: {
+        orgId: actor.orgId,
+        supersededAt: null,
+        application: {
+          orgId: actor.orgId,
+          customerId: application.customerId,
+          applicationId: { not: applicationId },
+        },
+      },
+      // Newest first, so the most recent copy of a type leads — an income proof
+      // from last month is the one worth offering, not one from three loans ago.
+      orderBy: [{ documentType: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    /**
+     * One per type: the newest.
+     *
+     * Narrowed here rather than in the browser because a long-standing borrower
+     * accumulates a document per type per loan — a seeded fixture already
+     * reaches into the hundreds — and every one of those is a row the client
+     * would download to show a single button. The caller wants "what would I
+     * reuse for ID", which has exactly one answer.
+     */
+    const newestByType = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      if (!newestByType.has(row.documentType)) {
+        newestByType.set(row.documentType, row);
+      }
+    }
+
+    return [...newestByType.values()].map((row) => toDocumentSummary(row));
+  }
+
+  /**
+   * Attach a document the same customer filed on an earlier application.
+   *
+   * `fileRef` is an opaque storage key, so the new row points at the bytes
+   * already stored — this is an insert, not a file copy, and nothing is
+   * uploaded or duplicated.
+   *
+   * **Three things are deliberately not inherited.** `status` resets to PENDING,
+   * and `verifiedAt`/`verificationReason`/`verifiedBy` stay null: a verification
+   * decision was made about that document in the context of *that* application,
+   * and carrying it across would let a past reviewer's approval silently satisfy
+   * a new application's gate. `version` restarts at 1 because versioning is per
+   * application — the source's supersede chain is not this application's
+   * history.
+   */
+  async reuse(
+    actor: AuthContext,
+    applicationId: string,
+    dto: ReuseApplicationDocumentDto,
+    meta: RequestMeta,
+  ): Promise<LoanApplicationDocumentSummary> {
+    const application = await this.applications.findInScope(
+      actor,
+      applicationId,
+      meta,
+    );
+
+    this.assertAcceptsDocuments(application.status);
+
+    const source = await this.prisma.loanApplicationDocument.findFirst({
+      where: {
+        orgId: actor.orgId,
+        applicationDocumentId: dto.sourceDocumentId,
+        supersededAt: null,
+      },
+      include: { application: { select: { customerId: true } } },
+    });
+
+    // The load-bearing check. Without it this endpoint would let any document be
+    // attached to any application — worse than the retyping it replaces. Absent
+    // and another customer's are the same answer, so an id cannot be probed.
+    if (!source || source.application.customerId !== application.customerId) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const superseded = await this.prisma.loanApplicationDocument.findFirst({
+      where: {
+        orgId: actor.orgId,
+        applicationId,
+        documentType: source.documentType,
+        supersededAt: null,
+      },
+      orderBy: { version: 'desc' },
+    });
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      if (superseded) {
+        await tx.loanApplicationDocument.update({
+          where: {
+            orgId_applicationDocumentId: {
+              orgId: actor.orgId,
+              applicationDocumentId: superseded.applicationDocumentId,
+            },
+          },
+          data: { supersededAt: new Date() },
+        });
+      }
+
+      const row = await tx.loanApplicationDocument.create({
+        data: {
+          orgId: actor.orgId,
+          applicationId,
+          documentType: source.documentType,
+          documentNumber: source.documentNumber,
+          // The same stored object. Both applications reference one file.
+          fileRef: source.fileRef,
+          fileName: source.fileName,
+          mimeType: source.mimeType,
+          fileSize: source.fileSize,
+          version: (superseded?.version ?? 0) + 1,
+          uploadedBy: actor.userId,
+          status: 'PENDING',
+        },
+      });
+
+      await this.audit.record(
+        {
+          orgId: actor.orgId,
+          action: AuditAction.LOAN_APPLICATION_DOCUMENT_UPLOADED,
+          entityType: 'LOAN_APPLICATION_DOCUMENT',
+          entityId: row.applicationDocumentId,
+          actorUserId: actor.userId,
+          requestId: meta.requestId,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+          metadata: {
+            applicationId,
+            documentType: row.documentType,
+            version: row.version,
+            // Named so the trail says this was reused rather than uploaded, and
+            // from where — the same file now evidences two applications.
+            reusedFromDocumentId: source.applicationDocumentId,
+            reusedFromApplicationId: source.applicationId,
+            replaced: superseded?.applicationDocumentId ?? null,
+          },
+        },
+        tx,
+      );
+
+      return row;
+    });
+
+    return toDocumentSummary(created);
   }
 
   /** Per-document review, independent of the application's own decision. */

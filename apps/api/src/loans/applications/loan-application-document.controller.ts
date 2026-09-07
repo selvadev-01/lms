@@ -20,6 +20,7 @@ import type { AuthContext } from '../../common/auth-context';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import {
+  ReuseApplicationDocumentDto,
   UploadApplicationDocumentDto,
   VerifyApplicationDocumentDto,
 } from './dto/loan-application.dto';
@@ -87,6 +88,45 @@ export class LoanApplicationDocumentController {
       file,
       this.meta(req),
     );
+  }
+
+  /**
+   * What this customer filed on an earlier application, offered for reuse.
+   *
+   * Declared before the `:documentId` routes below: a param route in the same
+   * controller would otherwise match `reusable` as a document id.
+   */
+  @Get('reusable')
+  @RequirePermissions(APPLICATIONS_DOCUMENTS_VIEW_PERMISSION)
+  async reusable(
+    @CurrentUser() user: AuthContext,
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Req() req: Request,
+  ): Promise<{ documents: LoanApplicationDocumentSummary[] }> {
+    const documents = await this.documents.reusable(
+      user,
+      applicationId,
+      this.meta(req),
+    );
+
+    return { documents };
+  }
+
+  /**
+   * Attach one of them. Same permission as uploading, because that is what this
+   * is — attaching evidence, by pointing at a file already stored rather than
+   * sending it again.
+   */
+  @Post('reuse')
+  @RequirePermissions(APPLICATIONS_DOCUMENTS_UPLOAD_PERMISSION)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async reuse(
+    @CurrentUser() user: AuthContext,
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Body() dto: ReuseApplicationDocumentDto,
+    @Req() req: Request,
+  ): Promise<LoanApplicationDocumentSummary> {
+    return this.documents.reuse(user, applicationId, dto, this.meta(req));
   }
 
   @Post(':documentId/verify')

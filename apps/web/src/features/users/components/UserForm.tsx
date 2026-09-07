@@ -7,9 +7,10 @@ import {
   USER_STATUS_OPTIONS,
   pick,
 } from "@lms/validation";
-import React, { useActionState } from "react";
+import React, { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ReadField, ReadFields } from "@/components/common/ReadField";
 import { SelectField } from "@/components/form/FormFields";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
@@ -81,6 +82,13 @@ export default function UserForm({
   canEdit,
 }: UserFormProps) {
   const mode = user ? "edit" : "create";
+  /**
+   * Read first when editing an existing record.
+   *
+   * A create form has nothing to read, so it opens straight into the fields —
+   * `mode` is what decides, not the permission.
+   */
+  const [editing, setEditing] = useState(mode === "create");
   const isEmployee = surface === "EMPLOYEE";
   const noun = isEmployee ? "employee" : "user";
 
@@ -112,8 +120,60 @@ export default function UserForm({
     );
   }
 
+  if (user && !editing) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+            {isEmployee ? "Employee" : "Administrator"}
+          </h3>
+          {/* Absent rather than disabled without the permission: a control that
+              appears and then refuses is worse than one never offered. */}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-brand-500 text-sm font-medium hover:underline"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        <ReadFields>
+          <ReadField label="Name" value={user.name} />
+          <ReadField label="Mobile Number" value={user.mobile} />
+          <ReadField label="Email" value={user.email} />
+          {isEmployee && (
+            <ReadField label="Employee ID" value={user.employeeCode} />
+          )}
+          <ReadField label="Branch" value={user.branchName} />
+          <ReadField label="Status" value={user.status.toLowerCase()} />
+          <ReadField
+            label="Roles"
+            value={user.roles.length > 0 ? user.roles.join(", ") : null}
+          />
+        </ReadFields>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {user && (
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+            Edit {noun}
+          </h3>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-brand-500 text-sm font-medium hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       <div role="alert" aria-live="assertive">
         {state.message ? (
           <Alert variant="error" title="Not saved" message={state.message} />

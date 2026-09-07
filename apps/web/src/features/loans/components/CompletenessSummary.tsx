@@ -1,4 +1,10 @@
+"use client";
+
 import type { ApplicationCompleteness, CompletenessCheck } from "@lms/types";
+
+import { useT } from "@/context/LanguageContext";
+import type { MessageKey } from "@/i18n/messages/en";
+import { isMessageKey, type TParams } from "@/i18n/translate";
 
 /**
  * Wizard step 6's validation summary.
@@ -7,63 +13,77 @@ import type { ApplicationCompleteness, CompletenessCheck } from "@lms/types";
  * nine in a fixed order. A list that showed only failures would change shape as
  * problems were fixed, and a clerk working down it would lose their place.
  *
- * The copy lives here rather than on the server. The API returns machine-
- * readable reasons (`DOCUMENTS_MISSING`, `TERM_NOT_OFFERED`) so that its
- * contract does not change every time the wording is improved.
+ * The copy lives in the message catalogue rather than on the server. The API
+ * returns machine-readable reasons (`DOCUMENTS_MISSING`, `TERM_NOT_OFFERED`) so
+ * that its contract does not change every time the wording is improved — and so
+ * that the same reason can be phrased in either instruction language.
+ *
+ * `"use client"` is explicit even though the only importer (ApplicationDetail)
+ * is already a client component: this reads the language context, so it must
+ * never be pulled into a server tree by a future caller.
  */
 
-const CHECK_LABEL: Record<string, string> = {
-  CUSTOMER_ACTIVE: "Customer is active",
-  SCHEME_ACTIVE: "Loan scheme is available",
-  DURATION_SUPPORTED: "Scheme offers this duration",
-  AMOUNT_VALID: "Loan amount is valid",
-  PURPOSE_PRESENT: "Purpose is recorded",
-  RATE_VALID: "Interest rate is permitted",
-  GUARANTORS_READY: "Guarantors are ready",
-  DOCUMENTS_COMPLETE: "Required documents attached",
-  EMI_COMPUTES: "Repayment schedule calculates",
-};
-
-/** Why a check failed, phrased as something the reader can act on. */
-function explain(check: CompletenessCheck): string {
+/**
+ * Resolves a failed check to a message key and its interpolation arguments.
+ *
+ * Split from rendering so that whole sentences live in the catalogue. Tamil
+ * places the count and the noun differently from English, so a sentence
+ * assembled here from fragments could not be translated correctly.
+ */
+function explainKey(check: CompletenessCheck): {
+  key: MessageKey;
+  params?: TParams;
+} {
   switch (check.reason) {
     case "CUSTOMER_NOT_ACTIVE":
-      return "This customer is not active. Reactivate them before continuing.";
+      return { key: "loans.completeness.reason.CUSTOMER_NOT_ACTIVE" };
     case "SCHEME_NOT_FOUND":
-      return "The selected scheme no longer exists. Choose another.";
+      return { key: "loans.completeness.reason.SCHEME_NOT_FOUND" };
     case "PRODUCT_INACTIVE":
-      return "The loan product has been withdrawn. Choose a scheme under an active product.";
+      return { key: "loans.completeness.reason.PRODUCT_INACTIVE" };
     case "SCHEME_INACTIVE":
-      return "This scheme has been withdrawn and cannot be used for new applications.";
+      return { key: "loans.completeness.reason.SCHEME_INACTIVE" };
     case "TERM_NOT_OFFERED": {
       const details = check.details as
         { frequency?: string; durationCount?: number } | undefined;
       return details
-        ? `The scheme does not offer ${details.durationCount} ${String(details.frequency ?? "").toLowerCase()} periods. Choose a different duration.`
-        : "The scheme does not offer the selected duration.";
+        ? {
+            key: "loans.completeness.reason.TERM_NOT_OFFERED",
+            params: {
+              count: details.durationCount ?? 0,
+              frequency: String(details.frequency ?? "").toLowerCase(),
+            },
+          }
+        : { key: "loans.completeness.reason.TERM_NOT_OFFERED_GENERIC" };
     }
     case "AMOUNT_NOT_POSITIVE":
-      return "Enter a loan amount greater than zero.";
+      return { key: "loans.completeness.reason.AMOUNT_NOT_POSITIVE" };
     case "PURPOSE_MISSING":
-      return "Record what the loan is for.";
+      return { key: "loans.completeness.reason.PURPOSE_MISSING" };
     case "RATE_NEGATIVE":
-      return "The interest rate cannot be negative.";
+      return { key: "loans.completeness.reason.RATE_NEGATIVE" };
     case "RATE_DIFFERS_FROM_SCHEME":
-      return "The rate differs from the scheme's. Use the Custom Rate interest type, which requires additional permission.";
+      return { key: "loans.completeness.reason.RATE_DIFFERS_FROM_SCHEME" };
     case "GUARANTOR_NOT_READY":
-      return "A guarantor is inactive, has not consented, or has incomplete KYC.";
+      return { key: "loans.completeness.reason.GUARANTOR_NOT_READY" };
     case "DOCUMENTS_MISSING": {
       const details = check.details as { missing?: string[] } | undefined;
       return details?.missing?.length
-        ? `Still needed: ${details.missing.join(", ")}.`
-        : "Required documents are missing.";
+        ? {
+            key: "loans.completeness.reason.DOCUMENTS_MISSING",
+            params: { missing: details.missing.join(", ") },
+          }
+        : { key: "loans.completeness.reason.DOCUMENTS_MISSING_GENERIC" };
     }
     default:
       // An unrecognised reason still says something true rather than nothing.
       // The API may add reasons this build has never seen.
       return check.reason
-        ? `This check did not pass (${check.reason}).`
-        : "This check did not pass.";
+        ? {
+            key: "loans.completeness.reason.UNKNOWN_WITH_CODE",
+            params: { reason: check.reason },
+          }
+        : { key: "loans.completeness.reason.UNKNOWN" };
   }
 }
 
@@ -72,6 +92,8 @@ export default function CompletenessSummary({
 }: {
   completeness: ApplicationCompleteness;
 }) {
+  const t = useT();
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -85,47 +107,66 @@ export default function CompletenessSummary({
               : "text-warning-600 dark:text-warning-500 text-sm font-medium"
           }
         >
-          {completeness.submittable ? "Ready to submit" : "Not ready"}
+          {completeness.submittable
+            ? t("loans.completeness.readyToSubmit")
+            : t("loans.completeness.notReady")}
         </span>
       </div>
 
       <ul className="divide-y divide-gray-200 rounded-2xl border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
-        {completeness.checks.map((check) => (
-          <li key={check.key} className="flex gap-3 px-4 py-3">
-            <span
-              aria-hidden="true"
-              className={
-                check.satisfied
-                  ? "text-success-500 mt-0.5 shrink-0"
-                  : "text-error-500 mt-0.5 shrink-0"
-              }
-            >
-              {check.satisfied ? "✓" : "✕"}
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm text-gray-800 dark:text-white/90">
-                {CHECK_LABEL[check.key] ?? check.key}
-                {/* The icon is aria-hidden, so the state is carried in text for
-                    anyone who cannot see the colour or the glyph. */}
-                <span className="sr-only">
-                  {check.satisfied ? " — passed" : " — not passed"}
-                </span>
-              </p>
-              {!check.satisfied && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {explain(check)}
+        {completeness.checks.map((check) => {
+          /**
+           * The check key *is* the last segment of the label key, so no lookup
+           * table is needed. The guard is not ceremony: a reason this build has
+           * never seen produces a key in neither catalogue, and without it the
+           * raw key string would render as the label.
+           */
+          const labelKey = `loans.completeness.label.${check.key}`;
+          const label = isMessageKey(labelKey) ? t(labelKey) : check.key;
+
+          return (
+            <li key={check.key} className="flex gap-3 px-4 py-3">
+              <span
+                aria-hidden="true"
+                className={
+                  check.satisfied
+                    ? "text-success-500 mt-0.5 shrink-0"
+                    : "text-error-500 mt-0.5 shrink-0"
+                }
+              >
+                {check.satisfied ? "✓" : "✕"}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm text-gray-800 dark:text-white/90">
+                  {label}
+                  {/* The icon is aria-hidden, so the state is carried in text
+                      for anyone who cannot see the colour or the glyph. It
+                      follows the instruction language because the reader's
+                      screen-reader voice follows `<html lang>`. */}
+                  <span className="sr-only">
+                    {check.satisfied
+                      ? t("loans.completeness.sr.passed")
+                      : t("loans.completeness.sr.notPassed")}
+                  </span>
                 </p>
-              )}
-            </div>
-          </li>
-        ))}
+                {!check.satisfied &&
+                  (() => {
+                    const { key, params } = explainKey(check);
+                    return (
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(key, params)}
+                      </p>
+                    );
+                  })()}
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       {!completeness.submittable && (
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Submission is blocked until every check passes. The server re-runs all
-          of them when you submit, so a scheme withdrawn in the meantime is
-          still caught.
+          {t("loans.completeness.blocked")}
         </p>
       )}
     </section>

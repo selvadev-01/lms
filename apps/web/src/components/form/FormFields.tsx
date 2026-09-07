@@ -249,6 +249,7 @@ export function TextAreaField({
   maxLength,
   rows = 3,
   placeholder,
+  hint,
 }: {
   name: string;
   label: string;
@@ -260,6 +261,7 @@ export function TextAreaField({
   maxLength?: number;
   rows?: number;
   placeholder?: string;
+  hint?: string;
 }) {
   // `useId` rather than `name` for the DOM id. Two forms on one page can both
   // carry a `comments` field — request-more-info and modify-terms do exactly
@@ -286,9 +288,21 @@ export function TextAreaField({
         maxLength={maxLength}
         placeholder={placeholder}
         aria-invalid={errors ? true : undefined}
-        aria-describedby={errors ? `${id}-error` : undefined}
+        aria-describedby={
+          errors ? `${id}-error` : hint ? `${id}-hint` : undefined
+        }
         className="shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30"
       />
+      {/* Yields to the error, matching `Field`: an error and a hint at once
+          gives the control two descriptions and buries the actionable one. */}
+      {hint && !errors && (
+        <p
+          id={`${id}-hint`}
+          className="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+        >
+          {hint}
+        </p>
+      )}
       {errors && (
         <p id={`${id}-error`} className="text-error-500 mt-1.5 text-sm">
           {errors[0]}

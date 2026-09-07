@@ -3,9 +3,10 @@
 import type { BranchDetail } from "@lms/types";
 import { Alert, Badge, Button } from "@lms/ui";
 import { RECORD_STATUS_OPTIONS } from "@lms/validation";
-import React, { useActionState } from "react";
+import React, { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ReadField, ReadFields } from "@/components/common/ReadField";
 import { SelectField } from "@/components/form/FormFields";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
@@ -47,6 +48,8 @@ export interface BranchFormProps {
  */
 export default function BranchForm({ branch, canEdit }: BranchFormProps) {
   const mode = branch ? "edit" : "create";
+  /** Read first when editing; a create form has nothing to read. */
+  const [editing, setEditing] = useState(mode === "create");
 
   const [state, formAction] = useActionState<BranchFormState, FormData>(
     branch ? updateBranchAction : createBranchAction,
@@ -56,8 +59,56 @@ export default function BranchForm({ branch, canEdit }: BranchFormProps) {
   const fieldError = (name: string): string | undefined =>
     state.errors?.[name]?.[0];
 
+  if (branch && !editing) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+            Branch
+          </h3>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-brand-500 text-sm font-medium hover:underline"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        <ReadFields>
+          <ReadField label="Code" value={branch.code} />
+          <ReadField label="Name" value={branch.name} />
+          <ReadField label="Address" value={branch.addressLine1} />
+          <ReadField label="Address Line 2" value={branch.addressLine2} />
+          <ReadField label="City" value={branch.city} />
+          <ReadField label="State" value={branch.state} />
+          <ReadField label="Postal Code" value={branch.pincode} />
+          <ReadField label="Phone" value={branch.phone} />
+          <ReadField label="Contact Email" value={branch.contactEmail} />
+          <ReadField label="Status" value={branch.status.toLowerCase()} />
+        </ReadFields>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {branch && (
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+            Edit branch
+          </h3>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-brand-500 text-sm font-medium hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       <div role="alert" aria-live="assertive">
         {state.message ? (
           <Alert variant="error" title="Not saved" message={state.message} />

@@ -34,6 +34,13 @@ export interface ReportFilters {
   toDate?: string;
   dateBasis?: string;
   branchId?: string;
+  /**
+   * One borrower's rows, for the customer portfolio tab.
+   *
+   * A filter, not a scope — the API applies org and branch confinement
+   * regardless, so this can only narrow what the caller already sees.
+   */
+  customerId?: string;
   search?: string;
   page?: number;
   pageSize?: number;
@@ -47,6 +54,7 @@ function queryFrom(filters: ReportFilters): string {
 
   if (filters.fromDate) query.set("fromDate", filters.fromDate);
   if (filters.toDate) query.set("toDate", filters.toDate);
+  if (filters.customerId) query.set("customerId", filters.customerId);
   if (filters.dateBasis) query.set("dateBasis", filters.dateBasis);
   if (filters.branchId) query.set("branchId", filters.branchId);
   if (filters.search) query.set("search", filters.search);

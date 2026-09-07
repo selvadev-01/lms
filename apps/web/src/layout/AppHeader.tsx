@@ -1,4 +1,5 @@
 "use client";
+import { LanguageToggleButton } from "@/components/common/LanguageToggleButton";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import UserDropdown from "@/components/header/UserDropdown";
@@ -125,6 +126,10 @@ const AppHeader: React.FC<{
           } shadow-theme-md w-full items-center justify-between gap-4 px-5 py-4 lg:flex lg:justify-end lg:px-0 lg:shadow-none`}
         >
           <div className="2xsm:gap-3 flex items-center gap-2">
+            {/* <!-- Instruction Language Toggler --> */}
+            <LanguageToggleButton />
+            {/* <!-- Instruction Language Toggler --> */}
+
             {/* <!-- Dark Mode Toggler --> */}
             <ThemeToggleButton />
             {/* <!-- Dark Mode Toggler --> */}

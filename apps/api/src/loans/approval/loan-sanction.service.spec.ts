@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ApplicationTransitionService } from '../applications/application-transition.service';
 import { LoanSanctionService } from './loan-sanction.service';
 import type { LoanApplicationService } from '../applications/loan-application.service';
+import type { LoanApplicationReviewService } from './loan-application-review.service';
 import type { ApplicationWithRelations } from '../applications/loan-application.mapper';
 import type { ApplicationStatus } from '@lms/types';
 
@@ -203,8 +204,24 @@ function harness(
     audit as unknown as AuditService,
   );
 
+  /**
+   * Approval is a stub, replaced per-test by the `approveAndIssue` block below.
+   *
+   * Deliberately not the real service: approval's gates are proved in
+   * `loan-application-review.service.spec.ts`, and re-proving them here against
+   * a second set of stubs would mean two places to update when a gate changes.
+   * What this file owns is the seam — that the letter is issued against the
+   * version approval produced, and that a refused approval writes no letter.
+   */
+  const reviews = { approve: jest.fn() };
+
   return {
-    service: new LoanSanctionService(prisma, applications, transitions),
+    service: new LoanSanctionService(
+      prisma,
+      applications,
+      transitions,
+      reviews as unknown as LoanApplicationReviewService,
+    ),
     audit,
     updateMany,
     letterCreate,
@@ -653,5 +670,71 @@ describe('scope', () => {
         META,
       ),
     ).rejects.toBe(denied);
+  });
+});
+
+/**
+ * Approve and issue in one request.
+ *
+ * The combined action exists because both halves need the same permissions and
+ * the sanction takes no input the approval did not settle. What matters in a
+ * test is that it stays a composition of the two real methods rather than a
+ * third implementation of their gates — so these drive the seam, not the rules,
+ * which `loan-application-review.service.spec.ts` already owns.
+ */
+describe('approveAndIssue', () => {
+  it('issues the letter against the version approval produced', async () => {
+    // The approval bumps `updatedAt`. Passing the caller's original version on
+    // to the sanction would make every combined call fail the concurrency
+    // guard — which is the bug this asserts against.
+    const { service, letterCreate } = harness();
+    const approvedVersion = '2026-09-06T10:00:00.000Z';
+    (
+      service as unknown as { reviews: { approve: jest.Mock } }
+    ).reviews.approve = jest.fn(() =>
+      Promise.resolve({ version: approvedVersion }),
+    );
+
+    const issue = jest
+      .spyOn(service, 'issue')
+      .mockResolvedValue(
+        {} as unknown as Awaited<ReturnType<typeof service.issue>>,
+      );
+
+    await service.approveAndIssue(
+      actor(),
+      APPLICATION_ID,
+      { expectedVersion: VERSION },
+      META,
+    );
+
+    expect(issue).toHaveBeenCalledWith(
+      expect.anything(),
+      APPLICATION_ID,
+      expect.objectContaining({ expectedVersion: approvedVersion }),
+      expect.anything(),
+    );
+    expect(letterCreate).not.toHaveBeenCalled();
+  });
+
+  it('writes no sanction letter when approval refuses', async () => {
+    // The gate that matters: a failed assessment or a missing document must
+    // stop the whole thing, not approve and then fail on the letter.
+    const { service, letterCreate } = harness();
+    const blocked = new ConflictException('assessment missing');
+    (
+      service as unknown as { reviews: { approve: jest.Mock } }
+    ).reviews.approve = jest.fn(() => Promise.reject(blocked));
+
+    await expect(
+      service.approveAndIssue(
+        actor(),
+        APPLICATION_ID,
+        { expectedVersion: VERSION },
+        META,
+      ),
+    ).rejects.toBe(blocked);
+
+    expect(letterCreate).not.toHaveBeenCalled();
   });
 });

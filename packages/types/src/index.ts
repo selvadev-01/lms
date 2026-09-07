@@ -1396,6 +1396,22 @@ export interface ScheduleLoanSummary {
 }
 
 /**
+ * A loan as a list row, for the customer portfolio.
+ *
+ * Extends `ScheduleLoanSummary` rather than defining a parallel shape: the
+ * repayment schedule already publishes exactly these fields for exactly this
+ * row, and a second near-identical loan type is how two screens start
+ * disagreeing about what a loan is called.
+ *
+ * The two additions are the scheme's identity — a portfolio lists several loans
+ * at once, where the scheme name is what distinguishes them.
+ */
+export interface LoanSummaryView extends ScheduleLoanSummary {
+  schemeCode: string;
+  schemeName: string;
+}
+
+/**
  * The story's Schedule Summary block.
  *
  * Every figure is summed server-side from the persisted rows. A client-side sum

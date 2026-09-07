@@ -2,7 +2,9 @@
 
 import type { RoleDetail } from "@lms/types";
 import { Alert, Button } from "@lms/ui";
-import React, { useActionState } from "react";
+import React, { useActionState, useState } from "react";
+
+import { ReadField, ReadFields } from "@/components/common/ReadField";
 import { useFormStatus } from "react-dom";
 
 import Label from "@/components/form/Label";
@@ -48,6 +50,8 @@ export interface RoleFormProps {
  */
 export default function RoleForm({ role, canEdit }: RoleFormProps) {
   const mode = role ? "edit" : "create";
+  /** Read first when editing; a create form has nothing to read. */
+  const [editing, setEditing] = useState(mode === "create");
 
   const [state, formAction] = useActionState<RoleFormState, FormData>(
     role ? updateRoleAction : createRoleAction,
@@ -57,8 +61,61 @@ export default function RoleForm({ role, canEdit }: RoleFormProps) {
   const fieldError = (name: string): string | undefined =>
     state.errors?.[name]?.[0];
 
+  if (role && !editing) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+            Role
+          </h3>
+          {/* A system role refuses rename, so the button is withheld for the
+              same reason as the permission check — an offer that cannot be
+              honoured. */}
+          {canEdit && !role.isSystem && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-brand-500 text-sm font-medium hover:underline"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        <ReadFields>
+          <ReadField label="Code" value={role.code} />
+          <ReadField label="Name" value={role.name} />
+          <ReadField label="Description" value={role.description} />
+          <ReadField label="Status" value={role.status.toLowerCase()} />
+          <ReadField
+            label="Permissions"
+            value={String(role.permissionCount)}
+          />
+          <ReadField
+            label="Assigned users"
+            value={String(role.assignedUserCount)}
+          />
+        </ReadFields>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {role && (
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+            Edit role
+          </h3>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-brand-500 text-sm font-medium hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       <div role="alert" aria-live="assertive">
         {state.message ? (
           <Alert variant="error" title="Not saved" message={state.message} />

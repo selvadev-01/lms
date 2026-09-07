@@ -12,6 +12,7 @@ import {
   fetchApplicationHistory,
   fetchApprovalReadiness,
   fetchCompleteness,
+  fetchReusableDocuments,
   fetchCreditAssessment,
   fetchLoanApplication,
   fetchSanctionLetter,
@@ -71,12 +72,20 @@ export default async function LoanApplicationPage({
     PERMISSIONS.LOANS_APPLICATIONS_ASSESSMENT_VIEW,
   );
 
+  // Hoisted because the reusable-documents read below needs it, and it is the
+  // same value the capability object carries.
+  const canUpload = hasPermissions(
+    user,
+    PERMISSIONS.LOANS_APPLICATIONS_DOCUMENTS_UPLOAD,
+  );
+
   const [
     completenessResult,
     historyResult,
     assessmentResult,
     sanctionResult,
     readinessResult,
+    reusableDocuments,
   ] = await Promise.all([
     editable ? fetchCompleteness(applicationId) : Promise.resolve(null),
     fetchApplicationHistory(applicationId),
@@ -90,6 +99,12 @@ export default async function LoanApplicationPage({
     application.status === "UNDER_REVIEW"
       ? fetchApprovalReadiness(applicationId)
       : Promise.resolve(null),
+    // Only while documents can still be attached. A repeat borrower's earlier
+    // files are an offer to a clerk who is filling the pack, not a permanent
+    // feature of the screen.
+    editable && canUpload
+      ? fetchReusableDocuments(applicationId)
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -118,6 +133,7 @@ export default async function LoanApplicationPage({
           readiness={
             readinessResult?.status === "ok" ? readinessResult.readiness : null
           }
+          reusableDocuments={reusableDocuments}
           capabilities={{
             canEdit: hasPermissions(
               user,
@@ -144,10 +160,7 @@ export default async function LoanApplicationPage({
               user,
               PERMISSIONS.LOANS_APPLICATIONS_DELETE_DRAFT,
             ),
-            canUpload: hasPermissions(
-              user,
-              PERMISSIONS.LOANS_APPLICATIONS_DOCUMENTS_UPLOAD,
-            ),
+            canUpload,
             canVerify: hasPermissions(
               user,
               PERMISSIONS.LOANS_APPLICATIONS_DOCUMENTS_VERIFY,

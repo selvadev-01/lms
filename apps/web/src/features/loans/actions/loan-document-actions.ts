@@ -75,6 +75,44 @@ export async function uploadApplicationDocumentAction(
 }
 
 /**
+ * Attach a document this customer filed on an earlier application.
+ *
+ * Documents belong to an application rather than to a customer, so a repeat
+ * borrower would otherwise re-scan the same identity proof for every loan. The
+ * API points the new row at the file already stored, and resets it to PENDING —
+ * a reviewer still looks, they just do not wait for an upload.
+ */
+export async function reuseApplicationDocumentAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const applicationId = formData.get("applicationId");
+  const sourceDocumentId = formData.get("sourceDocumentId");
+
+  if (
+    typeof applicationId !== "string" ||
+    !applicationId ||
+    typeof sourceDocumentId !== "string" ||
+    !sourceDocumentId
+  ) {
+    return { message: UNAVAILABLE };
+  }
+
+  const outcome = await call(
+    `/loan-applications/${encodeURIComponent(applicationId)}/documents/reuse`,
+    { method: "POST", body: { sourceDocumentId } },
+    SERVICE,
+  );
+
+  if (outcome.kind === "session-ended") await endSession();
+  if (outcome.kind === "failed") return outcome.state;
+
+  revalidatePath(`/loans/applications/${applicationId}`);
+
+  return { success: "Document reused from the earlier application." };
+}
+
+/**
  * Verify or reject one document.
  *
  * Uploading is not verifying: a replacement always arrives PENDING, even when it

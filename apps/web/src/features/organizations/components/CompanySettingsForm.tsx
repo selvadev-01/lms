@@ -2,7 +2,9 @@
 
 import type { OrganizationDetail } from "@lms/types";
 import { Alert, Badge, Button } from "@lms/ui";
-import React, { useActionState } from "react";
+import React, { useActionState, useState } from "react";
+
+import { ReadField, ReadFields } from "@/components/common/ReadField";
 import { useFormStatus } from "react-dom";
 
 import Label from "@/components/form/Label";
@@ -46,9 +48,57 @@ export default function CompanySettingsForm({
   );
 
   const inactive = organization.status === "INACTIVE";
+  /**
+   * Read first. Unlike the other forms there is no create mode here — an
+   * organization always exists by the time anyone reaches this screen.
+   */
+  const [editing, setEditing] = useState(false);
+
+  if (!editing) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+            Organization
+          </h3>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-brand-500 text-sm font-medium hover:underline"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        <ReadFields>
+          {/* Immutable — it identifies the tenant at sign-in. Shown because it
+              is what someone signs in with, not because it can be changed. */}
+          <ReadField label="Organization Code" value={organization.code} />
+          <ReadField label="Name" value={organization.name} />
+          <ReadField label="Legal Name" value={organization.legalName} />
+          <ReadField label="Timezone" value={organization.timezone} />
+          <ReadField label="Status" value={organization.status.toLowerCase()} />
+        </ReadFields>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+          Edit organization
+        </h3>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="text-brand-500 text-sm font-medium hover:underline"
+        >
+          Cancel
+        </button>
+      </div>
       <div role="alert" aria-live="assertive">
         {state.message ? (
           <Alert variant="error" title="Not saved" message={state.message} />

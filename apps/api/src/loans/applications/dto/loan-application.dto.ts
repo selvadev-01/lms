@@ -277,6 +277,43 @@ export class ApproveApplicationDto {
   expectedVersion!: string;
 }
 
+/**
+ * Approve and issue the sanction letter in one request.
+ *
+ * The union of `ApproveApplicationDto` and `IssueSanctionDto`, minus the second
+ * `expectedVersion` — the approval bumps the row, so the sanction is issued
+ * against the version approval produced rather than one the caller could supply.
+ * Every field but the version is optional, which is the point: this combines two
+ * steps that between them ask for nothing mandatory.
+ */
+export class ApproveAndIssueDto {
+  @IsOptional()
+  @IsString()
+  @Transform(trim)
+  @MaxLength(1000)
+  comments?: string;
+
+  /** Recorded on the letter, not enforced — see `IssueSanctionDto`. */
+  @IsOptional()
+  @IsString()
+  @Transform(trim)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'Valid Until must be a date in YYYY-MM-DD format',
+  })
+  validUntil?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(trim)
+  @MaxLength(1000)
+  notes?: string;
+
+  @IsString()
+  @Transform(trim)
+  @IsNotEmpty({ message: 'This form is out of date. Reload and try again.' })
+  expectedVersion!: string;
+}
+
 export class RejectApplicationDto {
   /**
    * Mandatory, and separate from `comments` (Rule 40, Scenario 27). The unified
@@ -529,6 +566,19 @@ export class UploadApplicationDocumentDto {
   @Transform(trim)
   @MaxLength(100)
   documentNumber?: string;
+}
+
+/**
+ * Attach a document the same customer already filed on an earlier application.
+ *
+ * Only the source id: the type, file and number all come from the row being
+ * reused, so there is nothing for a caller to disagree with it about. That the
+ * source belongs to *this* customer is checked in the service, which is the only
+ * layer that can see both applications.
+ */
+export class ReuseApplicationDocumentDto {
+  @IsUUID('4', { message: 'Select a document to reuse' })
+  sourceDocumentId!: string;
 }
 
 export class VerifyApplicationDocumentDto {

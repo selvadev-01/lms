@@ -80,6 +80,13 @@ export class PortfolioReportService {
     const where = {
       orgId: actor.orgId,
       ...(branchId ? { branchId } : {}),
+      // One borrower's rows, for the customer portfolio screen.
+      //
+      // Deliberately *after* the two clauses above and never in place of them:
+      // this narrows a scope the caller already has. A customer in another
+      // branch matches nothing rather than becoming reachable, which is what
+      // keeps a filter from widening what a Branch Admin can see.
+      ...(query.customerId ? { customerId: query.customerId } : {}),
       // The range bounds the disbursement date, which is this category's
       // declared basis. A loan not yet disbursed has none and is excluded by
       // the filter rather than by a status check.

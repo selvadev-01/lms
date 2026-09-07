@@ -100,6 +100,19 @@ export class ReportQueryDto {
   @MaxLength(120)
   search?: string;
 
+  /**
+   * One borrower's rows, for the customer portfolio.
+   *
+   * A **filter, not a scope** — the same distinction `branchId` above carries.
+   * The org and branch clauses are applied unconditionally in the service
+   * whatever this says, so a customer id can only narrow what a caller already
+   * sees. Naming a customer in another branch matches nothing rather than
+   * reaching them, which also means it cannot be used to probe who exists.
+   */
+  @IsOptional()
+  @IsUUID('4', { message: 'Select a valid customer' })
+  customerId?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

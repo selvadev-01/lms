@@ -691,3 +691,211 @@ describe('LoanApplicationDocumentService.list', () => {
     );
   });
 });
+
+/**
+ * Reusing a document the same customer filed on an earlier application.
+ *
+ * Documents belong to an application, not a customer, so a repeat borrower is
+ * otherwise asked for the same ID and income proof on every loan. Reuse points a
+ * new row at bytes already stored.
+ *
+ * Its own harness: the shared one asserts every `findFirst` is scoped to a
+ * single application, which is exactly what this feature must not be — it looks
+ * deliberately across the customer's other applications, and the customer check
+ * replaces the application check as the boundary.
+ */
+describe('reuse', () => {
+  const OTHER_APPLICATION_ID = '55555555-5555-5555-5555-555555555555';
+  const SOURCE_DOCUMENT_ID = '66666666-6666-6666-6666-666666666666';
+  const CUSTOMER_ID = '77777777-7777-7777-7777-777777777777';
+
+  function reuseHarness(
+    options: {
+      status?: string;
+      /** The customer on the source document's application. */
+      sourceCustomerId?: string | null;
+      existing?: Record<string, unknown> | null;
+    } = {},
+  ) {
+    const source =
+      options.sourceCustomerId === null
+        ? null
+        : {
+            applicationDocumentId: SOURCE_DOCUMENT_ID,
+            applicationId: OTHER_APPLICATION_ID,
+            documentType: 'ID',
+            documentNumber: 'ABCD1234',
+            fileRef: `${ORG_ID}/${OTHER_APPLICATION_ID}/stored.jpg`,
+            fileName: 'aadhaar.jpg',
+            mimeType: 'image/jpeg',
+            fileSize: 4096,
+            version: 2,
+            // The source was VERIFIED. Whether that carries across is the point.
+            status: 'VERIFIED',
+            verifiedAt: new Date('2026-08-02T00:00:00.000Z'),
+            application: {
+              customerId: options.sourceCustomerId ?? CUSTOMER_ID,
+            },
+          };
+
+    const create = jest.fn((args: { data: Record<string, unknown> }) =>
+      Promise.resolve({
+        applicationDocumentId: 'created',
+        createdAt: new Date(),
+        ...args.data,
+      }),
+    );
+
+    const client = {
+      loanApplicationDocument: {
+        findFirst: jest.fn((args: { where: Record<string, unknown> }) => {
+          if (args.where.orgId !== ORG_ID) {
+            throw new Error('findFirst must be tenant-filtered');
+          }
+          // The source lookup carries a document id; the supersede lookup
+          // carries a document type.
+          if (args.where.applicationDocumentId !== undefined) {
+            return Promise.resolve(source);
+          }
+          return Promise.resolve(options.existing ?? null);
+        }),
+        create,
+        update: jest.fn(() => Promise.resolve({})),
+      },
+    };
+
+    const prisma = {
+      ...client,
+      $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
+        fn(client),
+      ),
+    } as unknown as PrismaService;
+
+    const applications = {
+      findInScope: jest.fn().mockResolvedValue({
+        applicationId: APPLICATION_ID,
+        customerId: CUSTOMER_ID,
+        status: options.status ?? 'DRAFT',
+      }),
+    } as unknown as LoanApplicationService;
+
+    const service = new LoanApplicationDocumentService(
+      prisma,
+      { record: jest.fn() } as unknown as AuditService,
+      applications,
+      { get: () => 5 * 1024 * 1024 } as unknown as ConfigService,
+      {
+        save: jest.fn(),
+        read: jest.fn(),
+        remove: jest.fn(),
+      },
+    );
+
+    return { service, create };
+  }
+
+  it('points the new row at the same stored file', async () => {
+    // An insert, not a copy: both applications reference one object, so nothing
+    // is uploaded and no bytes are duplicated.
+    const { service, create } = reuseHarness();
+
+    await service.reuse(
+      actor(),
+      APPLICATION_ID,
+      { sourceDocumentId: SOURCE_DOCUMENT_ID },
+      META,
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      containing({
+        data: containing({
+          applicationId: APPLICATION_ID,
+          documentType: 'ID',
+          fileRef: `${ORG_ID}/${OTHER_APPLICATION_ID}/stored.jpg`,
+          fileName: 'aadhaar.jpg',
+          documentNumber: 'ABCD1234',
+        }),
+      }),
+    );
+  });
+
+  /**
+   * The assertion that protects the approval gate.
+   *
+   * A verification decision was made about that document in the context of the
+   * *earlier* application. Carrying it across would let a past reviewer's
+   * approval silently satisfy this application's DOCUMENTS_COMPLETE check with
+   * nobody having looked. A later "why re-verify an identical file" tidy-up is
+   * exactly what this exists to stop.
+   */
+  it('resets the copy to PENDING rather than inheriting VERIFIED', async () => {
+    const { service, create } = reuseHarness();
+
+    await service.reuse(
+      actor(),
+      APPLICATION_ID,
+      { sourceDocumentId: SOURCE_DOCUMENT_ID },
+      META,
+    );
+
+    const data = create.mock.calls[0][0].data;
+    expect(data.status).toBe('PENDING');
+    expect(data.verifiedAt).toBeUndefined();
+    expect(data.verificationReason).toBeUndefined();
+    // Versioning is per application: this is the target's first version of the
+    // type, not a continuation of the source's chain.
+    expect(data.version).toBe(1);
+  });
+
+  it('refuses a document belonging to another customer', async () => {
+    // Without this the endpoint would attach any borrower's identity proof to
+    // any application — worse than the retyping it replaces.
+    const { service, create } = reuseHarness({
+      sourceCustomerId: '99999999-9999-9999-9999-999999999999',
+    });
+
+    await expect(
+      service.reuse(
+        actor(),
+        APPLICATION_ID,
+        { sourceDocumentId: SOURCE_DOCUMENT_ID },
+        META,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('answers not-found for a source that does not exist', async () => {
+    // Same answer as another customer's, so an id cannot be probed.
+    const { service } = reuseHarness({ sourceCustomerId: null });
+
+    await expect(
+      service.reuse(
+        actor(),
+        APPLICATION_ID,
+        { sourceDocumentId: SOURCE_DOCUMENT_ID },
+        META,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it.each(['APPROVED', 'REJECTED'])(
+    'refuses to attach to a %s application',
+    async (status) => {
+      // The same rule uploading obeys: a decided application's evidence is fixed.
+      const { service, create } = reuseHarness({ status });
+
+      await expect(
+        service.reuse(
+          actor(),
+          APPLICATION_ID,
+          { sourceDocumentId: SOURCE_DOCUMENT_ID },
+          META,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+});

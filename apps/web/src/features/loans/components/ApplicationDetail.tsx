@@ -5,6 +5,7 @@ import type {
   ApprovalReadiness,
   CreditAssessmentHistory,
   LoanApplicationDetail,
+  LoanApplicationDocumentSummary,
   LoanApplicationHistoryEntry,
   SanctionLetterDetail,
 } from "@lms/types";
@@ -22,6 +23,8 @@ import React, { useActionState, useState } from "react";
 import { recordCreditAssessmentAction } from "../actions/credit-assessment-actions";
 import {
   acceptSanctionAction,
+  // Aliased because the `useActionState` handle below takes the plain name.
+  approveAndSanctionAction as approveAndSanctionActionFn,
   approveApplicationAction,
   declineSanctionAction,
   deleteDraftAction,
@@ -35,9 +38,12 @@ import {
   type ApplicationFormState,
 } from "../actions/loan-application-actions";
 import {
+  reuseApplicationDocumentAction,
   uploadApplicationDocumentAction,
   verifyApplicationDocumentAction,
 } from "../actions/loan-document-actions";
+import { useT } from "@/context/LanguageContext";
+
 import CompletenessSummary from "./CompletenessSummary";
 import EmiSchedulePanel from "./EmiSchedulePanel";
 import { Field, SelectField, SubmitButton, TextAreaField } from "./FormParts";
@@ -92,6 +98,7 @@ export default function ApplicationDetail({
   assessment,
   sanction,
   readiness,
+  reusableDocuments,
 }: {
   application: LoanApplicationDetail;
   completeness: ApplicationCompleteness | null;
@@ -100,6 +107,13 @@ export default function ApplicationDetail({
   assessment: CreditAssessmentHistory | null;
   sanction: SanctionLetterDetail | null;
   readiness: ApprovalReadiness | null;
+  /**
+   * What this customer filed on their other applications.
+   *
+   * Empty for a first-time borrower and whenever documents can no longer be
+   * attached, so the panel simply renders nothing in the common case.
+   */
+  reusableDocuments: LoanApplicationDocumentSummary[];
 }) {
   const { status, version, applicationId } = application;
 
@@ -156,39 +170,7 @@ export default function ApplicationDetail({
         />
       )}
 
-      {isApproved && (
-        <Alert
-          variant="success"
-          title="Application approved"
-          // Rule 42 / Scenario 30: approval is not disbursement, and saying so
-          // here is the difference between a clerk waiting and a clerk paying out.
-          message="Approval does not release funds. The sanction letter, customer agreement and signed loan agreement are still required before disbursement."
-        />
-      )}
-
-      {isSanctioned && (
-        <Alert
-          variant="info"
-          title="Sanction letter issued"
-          message="Awaiting the customer's response. Record their acceptance or decline below."
-        />
-      )}
-
-      {customerAccepted && (
-        <Alert
-          variant="info"
-          title="Customer accepted the sanction"
-          message="The signed loan agreement is still required before disbursement."
-        />
-      )}
-
-      {status === "AGREEMENT_SIGNED" && (
-        <Alert
-          variant="success"
-          title="Agreement signed"
-          message="This application is complete and awaiting disbursement."
-        />
-      )}
+      <NextAction status={status} capabilities={capabilities} />
 
       <section className="grid gap-4 rounded-2xl border border-gray-200 p-5 sm:grid-cols-3 dark:border-gray-800">
         <Detail label="Purpose" value={application.purpose ?? "—"} />
@@ -226,6 +208,7 @@ export default function ApplicationDetail({
         application={application}
         capabilities={capabilities}
         frozen={decided}
+        reusable={reusableDocuments}
       />
 
       {(isDraft || needsInfo) && completeness && (
@@ -271,6 +254,104 @@ export default function ApplicationDetail({
   );
 }
 
+/**
+ * What happens next, and whose job it is.
+ *
+ * This replaced four hand-written status alerts. They each said what was
+ * outstanding but never who had to do it, which left a Branch Admin on an
+ * APPROVED application reading "the sanction letter is still required" beside a
+ * screen with no button and no explanation — the single most confusing moment in
+ * the flow, and not a permissions bug but a silence.
+ *
+ * So each state names the next step, and adds who is responsible when the
+ * *reader* cannot do it themselves. The capability booleans are already computed
+ * for the action buttons; this only reuses them, so the sentence and the button
+ * cannot disagree about whether you may act.
+ *
+ * Rule 42 / Scenario 30 still gets its own sentence on APPROVED: approval is not
+ * disbursement, and saying so is the difference between a clerk waiting and a
+ * clerk paying out.
+ */
+function NextAction({
+  status,
+  capabilities,
+}: {
+  status: string;
+  capabilities: Capabilities;
+}) {
+  // Who to go to, said only when the reader cannot act. Telling someone who may
+  // press the button to ask an approver would be noise.
+  const approver = "This needs an approver — ask whoever holds that role.";
+
+  const step = ((): {
+    variant: "info" | "success";
+    title: string;
+    message: string;
+  } | null => {
+    switch (status) {
+      case "SUBMITTED":
+      case "UNDER_REVIEW":
+        return {
+          variant: "info",
+          title: "Awaiting review",
+          message: capabilities.canApprove
+            ? "Record a credit assessment, then approve or reject the application."
+            : "A reviewer records the credit assessment; approval itself needs an approver.",
+        };
+      case "MORE_INFO_REQUIRED":
+        return {
+          variant: "info",
+          title: "More information requested",
+          message:
+            "Answer the reviewer's request, then return the application to review.",
+        };
+      case "APPROVED":
+        return {
+          variant: "success",
+          title: "Approved — sanction letter next",
+          message: `Approval does not release funds. ${
+            capabilities.canIssueSanction
+              ? "Issue the sanction letter below; the customer's response and the signed agreement follow."
+              : approver
+          }`,
+        };
+      case "SANCTIONED":
+        return {
+          variant: "info",
+          title: "Awaiting the customer's response",
+          message: capabilities.canRecordSanctionResponse
+            ? "Record below whether the customer accepted or declined the sanction."
+            : "Someone at the branch records what the customer answered.",
+        };
+      case "CUSTOMER_ACCEPTED":
+        return {
+          variant: "info",
+          title: "Awaiting the signed agreement",
+          message: capabilities.canRecordAgreement
+            ? "Once the customer has signed the paper agreement, record it below. That is the last step before disbursement."
+            : "Someone at the branch records the signed agreement once it arrives.",
+        };
+      case "AGREEMENT_SIGNED":
+        return {
+          variant: "success",
+          title: "Ready to disburse",
+          message:
+            "This application is complete. Disbursement is scheduled and confirmed under Disbursement.",
+        };
+      default:
+        // DRAFT has the completeness summary, and a decided application has its
+        // own message. Neither needs a next step spelled out here.
+        return null;
+    }
+  })();
+
+  if (!step) return null;
+
+  return (
+    <Alert variant={step.variant} title={step.title} message={step.message} />
+  );
+}
+
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -284,13 +365,19 @@ function DocumentsPanel({
   application,
   capabilities,
   frozen,
+  reusable,
 }: {
   application: LoanApplicationDetail;
   capabilities: Capabilities;
   frozen: boolean;
+  reusable: LoanApplicationDocumentSummary[];
 }) {
   const [uploadState, uploadAction] = useActionState(
     uploadApplicationDocumentAction,
+    {},
+  );
+  const [reuseState, reuseAction] = useActionState(
+    reuseApplicationDocumentAction,
     {},
   );
   const [verifyState, verifyAction] = useActionState(
@@ -301,6 +388,19 @@ function DocumentsPanel({
   const byType = new Map(
     application.documents.map((document) => [document.documentType, document]),
   );
+
+  /**
+   * The most recent copy of each type from this customer's other applications.
+   *
+   * The API returns them newest first, so the first of a type wins — last
+   * month's income proof, not one from three loans ago.
+   */
+  const reusableByType = new Map<string, LoanApplicationDocumentSummary>();
+  for (const document of reusable) {
+    if (!reusableByType.has(document.documentType)) {
+      reusableByType.set(document.documentType, document);
+    }
+  }
 
   return (
     <section className="space-y-4">
@@ -328,6 +428,16 @@ function DocumentsPanel({
           title="Could not record decision"
           message={verifyState.message}
         />
+      )}
+      {reuseState.message && (
+        <Alert
+          variant="error"
+          title="Could not reuse the document"
+          message={reuseState.message}
+        />
+      )}
+      {reuseState.success && (
+        <Alert variant="success" title="Attached" message={reuseState.success} />
       )}
 
       <ul className="divide-y divide-gray-200 rounded-2xl border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
@@ -399,6 +509,41 @@ function DocumentsPanel({
                   />
                 </form>
               )}
+
+              {/* Offered only where nothing is attached yet: once a file is on
+                  this application, replacing it is the upload form's job. The
+                  copy arrives PENDING, so a reviewer still looks at it — this
+                  saves the re-scan, not the review. */}
+              {!document &&
+                capabilities.canUpload &&
+                !frozen &&
+                reusableByType.has(type) && (
+                  <form
+                    action={reuseAction}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <input
+                      type="hidden"
+                      name="applicationId"
+                      value={application.applicationId}
+                    />
+                    <input
+                      type="hidden"
+                      name="sourceDocumentId"
+                      value={
+                        reusableByType.get(type)!.applicationDocumentId
+                      }
+                    />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      This customer filed a {label.toLowerCase()} on an earlier
+                      application.
+                    </span>
+                    <SubmitButton
+                      label="Reuse it"
+                      pendingLabel="Attaching…"
+                    />
+                  </form>
+                )}
 
               {document && capabilities.canVerify && !frozen && (
                 <form
@@ -718,6 +863,7 @@ function SanctionPanel({
     {},
   );
   const [showDecline, setShowDecline] = useState(false);
+  const t = useT();
 
   const hidden = (
     <>
@@ -800,7 +946,7 @@ function SanctionPanel({
             label="Valid Until"
             type="date"
             errors={issueState.errors?.validUntil}
-            hint="Optional. Recorded on the letter; not enforced."
+            hint={t("loans.sanction.validUntilHint")}
           />
 
           <div className="sm:col-span-2">
@@ -813,8 +959,7 @@ function SanctionPanel({
           </div>
 
           <p className="text-xs text-gray-500 sm:col-span-2 dark:text-gray-400">
-            The letter carries the approved terms exactly. They cannot be
-            changed here.
+            {t("loans.sanction.termsFixed")}
           </p>
 
           <div className="sm:col-span-2">
@@ -828,6 +973,10 @@ function SanctionPanel({
 
       {state.isSanctioned && capabilities.canRecordSanctionResponse && (
         <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t("loans.sanction.responsePrompt")}
+          </p>
+
           <div className="flex flex-wrap items-center gap-3">
             <form action={acceptAction}>
               {hidden}
@@ -859,8 +1008,7 @@ function SanctionPanel({
               />
 
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Recording a decline rejects the application. The reason is kept
-                as its rejection reason.
+                {t("loans.sanction.declineIsFinal")}
               </p>
 
               <SubmitButton label="Confirm Decline" pendingLabel="Recording…" />
@@ -878,7 +1026,7 @@ function SanctionPanel({
             label="Signed Date"
             type="date"
             errors={agreementState.errors?.signedDate}
-            hint="Optional. Defaults to today."
+            hint={t("loans.sanction.signedDateHint")}
           />
 
           <Field
@@ -886,7 +1034,12 @@ function SanctionPanel({
             label="Agreement Reference"
             maxLength={100}
             errors={agreementState.errors?.agreementReference}
+            hint={t("loans.sanction.agreementReferenceHint")}
           />
+
+          <p className="text-xs text-gray-500 sm:col-span-2 dark:text-gray-400">
+            {t("loans.sanction.agreementIsARecord")}
+          </p>
 
           <div className="sm:col-span-2">
             <SubmitButton
@@ -930,6 +1083,10 @@ function ActionsPanel({
     approveApplicationAction,
     {},
   );
+  const [approveAndSanctionState, approveAndSanctionAction] = useActionState(
+    approveAndSanctionActionFn,
+    {},
+  );
   const [rejectState, rejectAction] = useActionState(
     rejectApplicationAction,
     {},
@@ -967,6 +1124,7 @@ function ActionsPanel({
           infoState,
           termsState,
           approveState,
+          approveAndSanctionState,
           rejectState,
           deleteState,
         ]}
@@ -985,6 +1143,10 @@ function ActionsPanel({
           </form>
         )}
 
+        {/* Submitting now lands in UNDER_REVIEW directly, so a new application
+            never shows this. It stays for the rows submitted before that change,
+            which are still sitting in SUBMITTED and would otherwise have no way
+            forward from this screen. */}
         {state.isSubmitted && capabilities.canReview && (
           <form action={reviewAction}>
             {hidden}
@@ -1002,12 +1164,30 @@ function ActionsPanel({
           </button>
         )}
 
-        {state.underReview && capabilities.canApprove && (
-          <form action={approveAction}>
-            {hidden}
-            <SubmitButton label="Approve" pendingLabel="Approving…" />
-          </form>
-        )}
+        {/* One button when the caller may do both halves, because the sanction
+            takes no input the approval did not settle — its terms are copied
+            from the application, and its two fields are optional. Splitting them
+            meant approving, waiting for a reload, then pressing a second button
+            on a form that could be left blank.
+
+            A caller holding only `loans.approve` still sees plain Approve, so a
+            tenant that gives the sanction to someone else keeps two steps. */}
+        {state.underReview &&
+          capabilities.canApprove &&
+          (capabilities.canIssueSanction ? (
+            <form action={approveAndSanctionAction}>
+              {hidden}
+              <SubmitButton
+                label="Approve & Issue Sanction"
+                pendingLabel="Approving…"
+              />
+            </form>
+          ) : (
+            <form action={approveAction}>
+              {hidden}
+              <SubmitButton label="Approve" pendingLabel="Approving…" />
+            </form>
+          ))}
 
         {(state.underReview || state.isSubmitted) && capabilities.canReject && (
           <button

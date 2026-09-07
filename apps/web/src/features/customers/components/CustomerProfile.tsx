@@ -1,9 +1,14 @@
 "use client";
 
+import type {
+  LoanApplicationSummary,
+  LoanSummaryView,
+  PortfolioReportRow,
+  RepaymentScheduleView,
+} from "@lms/types";
 import type { CustomerProfileResponse } from "@lms/types";
 import { Alert, Button } from "@lms/ui";
 import type { SelectOption } from "@lms/validation";
-import Link from "next/link";
 import React, { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -18,6 +23,9 @@ import {
 import CustomerForm from "./CustomerForm";
 import { CustomerStatusBadge, CustomerTypeBadge } from "./CustomerStatusBadge";
 import GuarantorList from "./GuarantorList";
+import { ReadField, ReadFields } from "@/components/common/ReadField";
+
+import CustomerPortfolio from "./CustomerPortfolio";
 import KycPanel from "./KycPanel";
 
 /**
@@ -61,6 +69,11 @@ type Tab = "details" | "kyc" | "guarantors" | "loans";
 
 export default function CustomerProfile({
   profile,
+  loans,
+  applications,
+  positions,
+  canSeeBalances,
+  schedules,
   canUpdate = false,
   canVerifyMobile = false,
   canActivate = false,
@@ -80,6 +93,20 @@ export default function CustomerProfile({
   genderOptions = [],
 }: {
   profile: CustomerProfileResponse;
+  /**
+   * This customer's loans and applications, for the Loans tab.
+   *
+   * Fetched by the page rather than here so the reads happen alongside the
+   * profile's own, and both default to empty — a failed loan read leaves the
+   * tab saying "nothing yet" rather than taking down a page about the customer.
+   */
+  loans: LoanSummaryView[];
+  applications: LoanApplicationSummary[];
+  /** Per-loan outstanding and arrears; empty without the reports permission. */
+  positions: PortfolioReportRow[];
+  canSeeBalances: boolean;
+  /** Instalment lists for the first few loans — see the page for the bound. */
+  schedules: RepaymentScheduleView[];
   canUpdate?: boolean;
   /**
    * Separate from `canUpdate`: a field agent verifies a customer's number
@@ -114,6 +141,13 @@ export default function CustomerProfile({
   const isLocal = customer.customerType === "LOCAL";
 
   const [tab, setTab] = useState<Tab>("details");
+  /**
+   * Whether the details form is open.
+   *
+   * Reset when the tab changes, so returning to Details lands on the read view
+   * rather than stranding a half-filled form nobody meant to leave open.
+   */
+  const [editing, setEditing] = useState(false);
   const [statusState, statusFormAction] = useActionState(
     setCustomerStatusAction,
     initial,
@@ -149,7 +183,9 @@ export default function CustomerProfile({
       [Tab, string]
     >),
     ["guarantors", "Guarantors"],
-    ["loans", "Active Loans"],
+    // "Loans" rather than "Active Loans": the tab shows closed loans and
+    // applications in progress too, so the narrower label would be wrong.
+    ["loans", "Loans"],
   ];
 
   return (
@@ -315,7 +351,10 @@ export default function CustomerProfile({
             <button
               key={value}
               type="button"
-              onClick={() => setTab(value)}
+              onClick={() => {
+                setTab(value);
+                setEditing(false);
+              }}
               aria-current={tab === value ? "page" : undefined}
               className={`border-b-2 pb-3 text-sm font-medium ${
                 tab === value
@@ -329,40 +368,54 @@ export default function CustomerProfile({
         </nav>
       </div>
 
-      {tab === "details" &&
-        (canUpdate ? (
-          <CustomerForm customer={customer} genderOptions={genderOptions} />
-        ) : (
-          /*
-            Read-only rendering rather than a disabled form: Scenario 23 is about
-            the edit being refused, and a form that looks editable until submit
-            would report that refusal too late.
-          */
-          <dl className="grid gap-4 sm:grid-cols-2">
-            {(
-              [
-                ["Full Name", customer.fullName],
-                ["Mobile Number", customer.mobile],
-                ["Email", customer.email],
-                ["Date of Birth", customer.dateOfBirth],
-                ["Gender", customer.gender],
-                ["Address", customer.addressLine1],
-                ["City", customer.city],
-                ["State", customer.state],
-                ["Postal Code", customer.pincode],
-              ] as const
-            ).map(([label, value]) => (
-              <div key={label}>
-                <dt className="text-xs text-gray-500 dark:text-gray-400">
-                  {label}
-                </dt>
-                <dd className="mt-0.5 text-sm text-gray-800 dark:text-white/90">
-                  {value ?? "—"}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        ))}
+      {tab === "details" && (
+        <div className="space-y-4">
+          {/*
+            Read first, edit on request.
+            
+            This used to render the form outright to anyone holding
+            `customers.update`, so "view a customer" and "edit a customer" were
+            the same screen and every field sat in an input nobody had asked to
+            change. The read layout below already existed — it was shown only to
+            callers who *could not* edit, which is precisely backwards from who
+            spends most time reading.
+          */}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-base font-medium text-gray-800 dark:text-white/90">
+              {editing ? "Edit details" : "Details"}
+            </h3>
+            {/* Absent, not disabled, without the permission: an editor's
+                control that appears and then refuses is worse than one that was
+                never offered. */}
+            {canUpdate && (
+              <button
+                type="button"
+                onClick={() => setEditing((open) => !open)}
+                className="text-brand-500 text-sm font-medium hover:underline"
+              >
+                {editing ? "Cancel" : "Edit"}
+              </button>
+            )}
+          </div>
+
+          {editing && canUpdate ? (
+            <CustomerForm customer={customer} genderOptions={genderOptions} />
+          ) : (
+            <ReadFields>
+              <ReadField label="Full Name" value={customer.fullName} />
+              <ReadField label="Mobile Number" value={customer.mobile} />
+              <ReadField label="Email" value={customer.email} />
+              <ReadField label="Date of Birth" value={customer.dateOfBirth} />
+              <ReadField label="Gender" value={customer.gender} />
+              <ReadField label="Address" value={customer.addressLine1} />
+              <ReadField label="Address Line 2" value={customer.addressLine2} />
+              <ReadField label="City" value={customer.city} />
+              <ReadField label="State" value={customer.state} />
+              <ReadField label="Postal Code" value={customer.pincode} />
+            </ReadFields>
+          )}
+        </div>
+      )}
 
       {tab === "kyc" && kyc && (
         <KycPanel
@@ -390,28 +443,19 @@ export default function CustomerProfile({
       )}
 
       {/*
-        Scenario 22 asks that permitted active loans be displayed. Loan
-        Management does not exist yet, so this states that plainly rather than
-        rendering an empty table — "no loans" and "loans cannot be shown yet" are
-        different claims.
+        Scenario 22 — the customer's permitted loans. This said "Loan Management
+        does not exist yet" until Modules 07-14 shipped; the placeholder outlived
+        the gap it described, which is why the screen was claiming a built
+        feature was missing.
       */}
       {tab === "loans" && (
-        <div
-          className="rounded-2xl border border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400"
-          role="status"
-        >
-          <p>Loan Management is not available yet.</p>
-          <p className="mt-1 text-xs">
-            This customer&apos;s loans will appear here once that module is
-            built.
-          </p>
-          <Link
-            href="/customers"
-            className="text-brand-500 mt-3 inline-block hover:underline"
-          >
-            Back to customers
-          </Link>
-        </div>
+        <CustomerPortfolio
+          positions={positions}
+          loans={loans}
+          applications={applications}
+          canSeeBalances={canSeeBalances}
+          schedules={schedules}
+        />
       )}
     </div>
   );
