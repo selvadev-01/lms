@@ -26,11 +26,11 @@
   "devDependencies": {
     "@lms/config": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.2.0",
+    "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^20.19.43",
     "@types/react": "^19.2.1",
-    "@types/react-dom": "^19.2.1",
+    "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.39.1",
     "jsdom": "^26.0.0",
