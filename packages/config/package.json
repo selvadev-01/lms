@@ -20,6 +20,6 @@
   },
   "dependencies": {
     "@eslint/js": "^9.39.1",
-    "typescript-eslint": "^8.20.0"
+    "typescript-eslint": "^8.71.1"
   }
 }
